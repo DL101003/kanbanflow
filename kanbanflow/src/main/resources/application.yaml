@@ -1,3 +1,17 @@
 spring:
-  application:
-    name: kanbanflow
+  datasource:
+    url: jdbc:postgresql://localhost:5432/kanbanflow
+    username: postgres
+    password: 123
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+jwt:
+  secret: qoAEABDke07+AVLepXB4aCMtsT0wMAqR5x2VFyldsnx6e75YQkJH2UcZKTjEyoNgG71SBCXfq5N6NVZxWOfsHQ==
+  expiration: 86400
+
+server:
+  port: 8080
