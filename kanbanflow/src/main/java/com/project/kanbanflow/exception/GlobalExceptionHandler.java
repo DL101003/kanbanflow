@@ -1,5 +1,6 @@
 package com.project.kanbanflow.exception;
 
+import com.project.kanbanflow.dtos.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.crossstore.ChangeSetPersister;
 import org.springframework.http.HttpStatus;

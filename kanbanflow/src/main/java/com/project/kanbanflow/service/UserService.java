@@ -1,9 +1,8 @@
 package com.project.kanbanflow.service;
 
-import com.project.kanbanflow.dtos.AuthResponse;
-import com.project.kanbanflow.dtos.LoginRequest;
-import com.project.kanbanflow.dtos.RegisterRequest;
+import com.project.kanbanflow.dtos.*;
 import com.project.kanbanflow.entity.User;
+import com.project.kanbanflow.exception.BadRequestException;
 import com.project.kanbanflow.exception.DuplicateException;
 import com.project.kanbanflow.exception.NotFoundException;
 import com.project.kanbanflow.exception.UnauthorizedException;
@@ -14,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -85,5 +85,44 @@ public class UserService {
     public User getUserById(UUID userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+    }
+
+    public User updateProfile(UpdateProfileRequest request) {
+        User currentUser = getCurrentUser();
+
+        // Check if email/username already taken by others
+        if (!currentUser.getEmail().equals(request.getEmail()) &&
+                userRepository.existsByEmail(request.getEmail())) {
+            throw new DuplicateException("Email already in use");
+        }
+
+        if (!currentUser.getUsername().equals(request.getUsername()) &&
+                userRepository.existsByUsername(request.getUsername())) {
+            throw new DuplicateException("Username already in use");
+        }
+
+        currentUser.setFullName(request.getFullName());
+        currentUser.setEmail(request.getEmail());
+        currentUser.setUsername(request.getUsername());
+        if (request.getAvatarUrl() != null) {
+            currentUser.setAvatarUrl(request.getAvatarUrl());
+        }
+
+        return userRepository.save(currentUser);
+    }
+
+    public void changePassword(ChangePasswordRequest request) {
+        User currentUser = getCurrentUser();
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), currentUser.getPasswordHash())) {
+            throw new BadRequestException("Current password is incorrect");
+        }
+
+        currentUser.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(currentUser);
+    }
+
+    public List<User> searchUsers(String query) {
+        return userRepository.searchByEmailOrUsername(query);
     }
 }

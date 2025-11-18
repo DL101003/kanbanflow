@@ -1,4 +1,4 @@
-package com.project.kanbanflow.exception;
+package com.project.kanbanflow.dtos;
 
 import lombok.Builder;
 import lombok.Data;
