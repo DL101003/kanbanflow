@@ -4,6 +4,8 @@ export interface User {
   email: string
   fullName: string
   avatarUrl?: string
+  active?: boolean
+  createdAt?: string
 }
 
 export interface AuthResponse {
@@ -24,13 +26,18 @@ export interface Project {
   owner: UserSummary
 }
 
+export interface ProjectDetail extends Project {
+  columns: BoardColumn[]
+  stats?: ProjectStats
+}
+
 export interface BoardColumn {
   id: string
   name: string
   color?: string
   position: number
   cardLimit?: number
-  cardCount: number
+  cardCount?: number
   cards?: Card[]
 }
 
@@ -38,7 +45,7 @@ export interface Card {
   id: string
   title: string
   description?: string
-  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
+  priority: Priority
   dueDate?: string
   coverColor?: string
   completed: boolean
@@ -46,6 +53,8 @@ export interface Card {
   assignee?: UserSummary
   commentCount: number
   overdue: boolean
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface Comment {
@@ -54,6 +63,7 @@ export interface Comment {
   edited: boolean
   author: UserSummary
   createdAt: string
+  updatedAt?: string
 }
 
 export interface UserSummary {
@@ -63,4 +73,28 @@ export interface UserSummary {
   avatarUrl?: string
 }
 
+export interface TeamMember {
+  user: UserSummary
+  role: 'OWNER' | 'ADMIN' | 'EDITOR' | 'VIEWER'
+  joinedAt: string
+}
+
+export interface Activity {
+  id: string
+  user: UserSummary
+  action: string
+  entityType: string
+  entityId: string
+  details: string
+  createdAt: string
+}
+
+export interface ProjectStats {
+  totalCards: number
+  completedCards: number
+  overdueCards: number
+  totalColumns: number
+}
+
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
+export type ProjectRole = 'ADMIN' | 'EDITOR' | 'VIEWER'

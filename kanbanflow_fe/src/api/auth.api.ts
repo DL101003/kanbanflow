@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { AuthResponse } from '@/types'
+import type { AuthResponse, User } from '@/types'
 
 export const authApi = {
   login: async (username: string, password: string): Promise<AuthResponse> => {
@@ -20,8 +20,25 @@ export const authApi = {
     return data
   },
   
-  getMe: async () => {
+  getMe: async (): Promise<User> => {
     const { data } = await apiClient.get('/api/auth/me')
     return data
+  },
+  
+  updateProfile: async (params: {
+    fullName: string
+    email: string
+    username: string
+    avatarUrl?: string
+  }): Promise<User> => {
+    const { data } = await apiClient.put('/api/users/me', params)
+    return data
+  },
+  
+  changePassword: async (params: {
+    currentPassword: string
+    newPassword: string
+  }): Promise<void> => {
+    await apiClient.put('/api/users/me/password', params)
   },
 }

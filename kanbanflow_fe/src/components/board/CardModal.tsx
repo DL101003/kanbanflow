@@ -1,48 +1,46 @@
-import { useState } from 'react'
-import { Modal, Form, Input, Select, DatePicker, Button, Avatar, List, Tag, message } from 'antd'
-import { UserOutlined, DeleteOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { format } from 'date-fns'
+import { useState, useEffect } from 'react'
+import { Modal, Form, Input, Select, DatePicker, Button, Tag, Divider, Tabs, message } from 'antd'
+import { DeleteOutlined, SaveOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { boardsApi } from '@/api/boards.api'
-import type { Card as CardType, Priority } from '@/types'
+import CommentSection from './CommentSection'
+import ActivityTimeline from '@/components/activity/ActivityTimeline'
+import type { Card as CardType } from '@/types'
+
+const { TextArea } = Input
+const { TabPane } = Tabs
 
 interface CardModalProps {
   card: CardType
   open: boolean
   onClose: () => void
+  onUpdate?: (data: Partial<CardType>) => void
+  onDelete?: () => void
 }
 
-const { TextArea } = Input
-
-export default function CardModal({ card, open, onClose }: CardModalProps) {
-  const queryClient = useQueryClient()
+export default function CardModal({ card, open, onClose, onUpdate, onDelete }: CardModalProps) {
   const [form] = Form.useForm()
-  const [comment, setComment] = useState('')
+  const [activeTab, setActiveTab] = useState('details')
 
-  const updateCardMutation = useMutation({
-    mutationFn: (values: Partial<CardType>) =>
-      boardsApi.updateCard(card.id, values),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['columns'] })
+  useEffect(() => {
+    if (card && open) {
+      form.setFieldsValue({
+        ...card,
+        dueDate: card.dueDate ? dayjs(card.dueDate) : null,
+      })
+    }
+  }, [card, open, form])
+
+  const handleSave = async () => {
+    try {
+      const values = await form.validateFields()
+      onUpdate?.({
+        ...values,
+        dueDate: values.dueDate ? values.dueDate.format('YYYY-MM-DD') : null,
+      })
       message.success('Card updated')
-    },
-  })
-
-  const deleteCardMutation = useMutation({
-    mutationFn: () => boardsApi.deleteCard(card.id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['columns'] })
-      message.success('Card deleted')
-      onClose()
-    },
-  })
-
-  const handleUpdate = (values: any) => {
-    updateCardMutation.mutate({
-      ...values,
-      dueDate: values.dueDate ? values.dueDate.format('YYYY-MM-DD') : null,
-    })
+    } catch (error) {
+      message.error('Please check the form')
+    }
   }
 
   const handleDelete = () => {
@@ -51,7 +49,10 @@ export default function CardModal({ card, open, onClose }: CardModalProps) {
       content: 'Are you sure you want to delete this card?',
       okText: 'Delete',
       okType: 'danger',
-      onOk: () => deleteCardMutation.mutate(),
+      onOk: () => {
+        onDelete?.()
+        onClose()
+      },
     })
   }
 
@@ -60,78 +61,62 @@ export default function CardModal({ card, open, onClose }: CardModalProps) {
       title={card.title}
       open={open}
       onCancel={onClose}
-      width={700}
+      width={800}
       footer={[
         <Button key="delete" danger icon={<DeleteOutlined />} onClick={handleDelete}>
           Delete
+        </Button>,
+        <Button key="save" type="primary" icon={<SaveOutlined />} onClick={handleSave}>
+          Save
         </Button>,
         <Button key="close" onClick={onClose}>
           Close
         </Button>,
       ]}
     >
-      <Form
-        form={form}
-        layout="vertical"
-        initialValues={{
-          ...card,
-          dueDate: card.dueDate ? dayjs(card.dueDate) : null,
-        }}
-        onValuesChange={(_, values) => handleUpdate(values)}
-      >
-        <Form.Item name="title" label="Title">
-          <Input />
-        </Form.Item>
+      <Tabs activeKey={activeTab} onChange={setActiveTab}>
+        <TabPane tab="Details" key="details">
+          <Form form={form} layout="vertical">
+            <Form.Item name="title" label="Title">
+              <Input placeholder="Card title" />
+            </Form.Item>
 
-        <Form.Item name="description" label="Description">
-          <TextArea rows={4} placeholder="Add a description..." />
-        </Form.Item>
+            <Form.Item name="description" label="Description">
+              <TextArea rows={4} placeholder="Add a description..." />
+            </Form.Item>
 
-        <div className="grid grid-cols-2 gap-4">
-          <Form.Item name="priority" label="Priority">
-            <Select>
-              <Select.Option value="LOW">Low</Select.Option>
-              <Select.Option value="MEDIUM">Medium</Select.Option>
-              <Select.Option value="HIGH">High</Select.Option>
-              <Select.Option value="URGENT">Urgent</Select.Option>
-            </Select>
-          </Form.Item>
+            <div className="grid grid-cols-2 gap-4">
+              <Form.Item name="priority" label="Priority">
+                <Select>
+                  <Select.Option value="LOW">Low</Select.Option>
+                  <Select.Option value="MEDIUM">Medium</Select.Option>
+                  <Select.Option value="HIGH">High</Select.Option>
+                  <Select.Option value="URGENT">Urgent</Select.Option>
+                </Select>
+              </Form.Item>
 
-          <Form.Item name="dueDate" label="Due Date">
-            <DatePicker className="w-full" />
-          </Form.Item>
-        </div>
+              <Form.Item name="dueDate" label="Due Date">
+                <DatePicker className="w-full" />
+              </Form.Item>
+            </div>
 
-        <Form.Item name="completed" label="Status">
-          <Select>
-            <Select.Option value={false}>In Progress</Select.Option>
-            <Select.Option value={true}>Completed</Select.Option>
-          </Select>
-        </Form.Item>
-      </Form>
+            <Form.Item name="completed" label="Status">
+              <Select>
+                <Select.Option value={false}>In Progress</Select.Option>
+                <Select.Option value={true}>Completed</Select.Option>
+              </Select>
+            </Form.Item>
+          </Form>
+        </TabPane>
 
-      <div className="mt-6">
-        <h4 className="font-semibold mb-3">Comments</h4>
-        
-        <div className="mb-4">
-          <TextArea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Write a comment..."
-            rows={3}
-          />
-          <Button
-            type="primary"
-            size="small"
-            className="mt-2"
-            disabled={!comment.trim()}
-          >
-            Add Comment
-          </Button>
-        </div>
+        <TabPane tab={`Comments (${card.commentCount})`} key="comments">
+          <CommentSection cardId={card.id} />
+        </TabPane>
 
-        {/* Comments list would go here */}
-      </div>
+        <TabPane tab="Activity" key="activity">
+          <ActivityTimeline cardId={card.id} />
+        </TabPane>
+      </Tabs>
     </Modal>
   )
 }

@@ -30,7 +30,13 @@ export default function Card({ card, isDragging }: CardProps) {
     transform,
     transition,
     isDragging: isSortableDragging,
-  } = useSortable({ id: card.id })
+  } = useSortable({
+    id: card.id,
+    data: {
+      type: 'Card',
+      columnId,
+    },
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),

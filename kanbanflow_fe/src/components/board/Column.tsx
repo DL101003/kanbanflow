@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Card as AntCard, Button, Input, Badge, Dropdown, Modal, Form, message } from 'antd'
+import { Card as AntCard, Button, Input, Badge, Dropdown, Modal, message } from 'antd'
 import { PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import Card from './Card'
@@ -10,13 +10,14 @@ import type { BoardColumn } from '@/types'
 
 interface ColumnProps {
   column: BoardColumn
+  onEdit?: () => void
+  onAddCard?: () => void
 }
 
-export default function Column({ column }: ColumnProps) {
+export default function Column({ column, onEdit, onAddCard }: ColumnProps) {
   const queryClient = useQueryClient()
   const [isAddingCard, setIsAddingCard] = useState(false)
   const [newCardTitle, setNewCardTitle] = useState('')
-  const [form] = Form.useForm()
 
   const {
     attributes,
@@ -37,7 +38,7 @@ export default function Column({ column }: ColumnProps) {
     mutationFn: (title: string) =>
       boardsApi.createCard(column.id, { title }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['columns'] })
+      queryClient.invalidateQueries({ queryKey: ['board'] })
       setIsAddingCard(false)
       setNewCardTitle('')
       message.success('Card created')
@@ -47,7 +48,7 @@ export default function Column({ column }: ColumnProps) {
   const deleteColumnMutation = useMutation({
     mutationFn: () => boardsApi.deleteColumn(column.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['columns'] })
+      queryClient.invalidateQueries({ queryKey: ['board'] })
       message.success('Column deleted')
     },
   })
@@ -64,6 +65,7 @@ export default function Column({ column }: ColumnProps) {
         key: 'edit',
         icon: <EditOutlined />,
         label: 'Edit',
+        onClick: onEdit,
       },
       {
         key: 'delete',
@@ -98,6 +100,12 @@ export default function Column({ column }: ColumnProps) {
                 {column.name}
               </span>
               <Badge count={column.cards?.length || 0} showZero />
+              {column.cardLimit && (
+                <Badge 
+                  count={`${column.cards?.length || 0}/${column.cardLimit}`}
+                  style={{ backgroundColor: '#52c41a' }}
+                />
+              )}
             </div>
             <Dropdown menu={columnMenu} trigger={['click']}>
               <Button type="text" size="small" icon={<MoreOutlined />} />
@@ -108,7 +116,7 @@ export default function Column({ column }: ColumnProps) {
       >
         <div className="space-y-2 min-h-[200px] max-h-[calc(100vh-300px)] overflow-y-auto">
           {column.cards?.map((card) => (
-            <Card key={card.id} card={card} columnId={column.id} />
+            <Card key={card.id} card={card} />
           ))}
 
           {isAddingCard ? (
@@ -149,7 +157,7 @@ export default function Column({ column }: ColumnProps) {
               type="dashed"
               icon={<PlusOutlined />}
               block
-              onClick={() => setIsAddingCard(true)}
+              onClick={() => onAddCard ? onAddCard() : setIsAddingCard(true)}
             >
               Add Card
             </Button>

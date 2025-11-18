@@ -1,90 +1,73 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Spin, Button, Modal, Form, Input, message } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { useParams, useNavigate } from 'react-router-dom'
+import { Button, Dropdown, Space, Empty } from 'antd'
+import {
+  PlusOutlined,
+  SettingOutlined,
+  TeamOutlined,
+  BarChartOutlined,
+} from '@ant-design/icons'
 import { DndContext, type DragEndEvent, DragOverlay, closestCorners } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
 import Board from '@/components/board/Board'
 import Card from '@/components/board/Card'
 import CardModal from '@/components/board/CardModal'
+import CreateCardModal from '@/components/board/CreateCardModal'
+import EditColumnModal from '@/components/board/EditColumnModal'
+import SearchBar from '@/components/board/SearchBar'
+import ProjectStats from '@/components/stats/ProjectStats'
+import PageHeader from '@/components/common/PageHeader'
+import Loading from '@/components/common/Loading'
+import { useBoard } from '@/hooks/useBoard'
+import { useQuery } from '@tanstack/react-query'
 import { projectsApi } from '@/api/projects.api'
-import { boardsApi } from '@/api/boards.api'
 import { useBoardStore } from '@/store/boardStore'
-import type { BoardColumn, Card as CardType } from '@/types'
+import type { Card as CardType, BoardColumn } from '@/types'
 
 export default function BoardView() {
   const { projectId } = useParams<{ projectId: string }>()
-  const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [activeCard, setActiveCard] = useState<CardType | null>(null)
-  const [isColumnModalOpen, setIsColumnModalOpen] = useState(false)
-  const [form] = Form.useForm()
-  
-  const { 
-    currentProject, 
-    columns, 
-    selectedCard,
-    setProject, 
-    setColumns,
-    moveCard,
-    setSelectedCard 
-  } = useBoardStore()
+  const [createCardModal, setCreateCardModal] = useState<{
+    open: boolean
+    columnId: string
+  }>({ open: false, columnId: '' })
+  const [editColumnModal, setEditColumnModal] = useState<{
+    open: boolean
+    column: BoardColumn | null
+  }>({ open: false, column: null })
+  const [showStats, setShowStats] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchFilters, setSearchFilters] = useState({})
 
-  const { data: project, isLoading: projectLoading } = useQuery({
+  const { selectedCard, setSelectedCard } = useBoardStore()
+
+  const { data: project } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => projectsApi.getProject(projectId!),
     enabled: !!projectId,
   })
 
-  const { data: columnsData, isLoading: columnsLoading } = useQuery({
-    queryKey: ['columns', projectId],
-    queryFn: async () => {
-      const cols = await boardsApi.getColumns(projectId!)
-      // Load cards for each column
-      const columnsWithCards = await Promise.all(
-        cols.map(async (col: BoardColumn) => {
-          const cards = await boardsApi.getCards(col.id)
-          return { ...col, cards }
-        })
-      )
-      return columnsWithCards
-    },
-    enabled: !!projectId,
-  })
+  const {
+    columns,
+    isLoading,
+    createColumn,
+    updateColumn,
+    deleteColumn,
+    createCard,
+    updateCard,
+    deleteCard,
+    moveCard,
+  } = useBoard(projectId)
 
-  const createColumnMutation = useMutation({
-    mutationFn: (params: { name: string; color?: string }) =>
-      boardsApi.createColumn(projectId!, params),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['columns', projectId] })
-      message.success('Column created')
-      setIsColumnModalOpen(false)
-      form.resetFields()
-    },
-  })
+  if (!projectId) {
+    navigate('/')
+    return null
+  }
 
-  const moveCardMutation = useMutation({
-    mutationFn: ({
-      cardId,
-      columnId,
-      position,
-    }: {
-      cardId: string
-      columnId: string
-      position: number
-    }) => boardsApi.moveCard(cardId, columnId, position),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['columns', projectId] })
-    },
-  })
-
-  useEffect(() => {
-    if (project) setProject(project)
-  }, [project])
-
-  useEffect(() => {
-    if (columnsData) setColumns(columnsData)
-  }, [columnsData])
+  if (isLoading) {
+    return <Loading fullScreen tip="Loading board..." />
+  }
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -94,7 +77,6 @@ export default function BoardView() {
     const activeId = active.id as string
     const overId = over.id as string
 
-    // Find card and columns
     let sourceColumn: BoardColumn | undefined
     let targetColumn: BoardColumn | undefined
     let draggedCard: CardType | undefined
@@ -108,10 +90,8 @@ export default function BoardView() {
       }
     }
 
-    // Determine target column
     targetColumn = columns.find((col) => col.id === overId)
     if (!targetColumn) {
-      // Check if dropped on a card
       for (const column of columns) {
         if (column.cards?.some((c) => c.id === overId)) {
           targetColumn = column
@@ -122,18 +102,13 @@ export default function BoardView() {
 
     if (!sourceColumn || !targetColumn || !draggedCard) return
 
-    // Calculate position
     let position = 0
     if (targetColumn.cards && targetColumn.cards.length > 0) {
       const overCardIndex = targetColumn.cards.findIndex((c) => c.id === overId)
       position = overCardIndex >= 0 ? overCardIndex : targetColumn.cards.length
     }
 
-    // Optimistic update
-    moveCard(activeId, sourceColumn.id, targetColumn.id, position)
-
-    // Server update
-    moveCardMutation.mutate({
+    moveCard({
       cardId: activeId,
       columnId: targetColumn.id,
       position,
@@ -142,105 +117,189 @@ export default function BoardView() {
     setActiveCard(null)
   }
 
-  const handleDragStart = (event: DragEndEvent) => {
-    const { active } = event
-    const cardId = active.id as string
+  const handleSearch = (query: string, filters: any) => {
+    setSearchQuery(query)
+    setSearchFilters(filters)
+  }
 
-    for (const column of columns) {
-      const card = column.cards?.find((c) => c.id === cardId)
-      if (card) {
-        setActiveCard(card)
-        break
-      }
+  const getFilteredColumns = () => {
+    if (!searchQuery && Object.keys(searchFilters).length === 0) {
+      return columns
+    }
+
+    return columns.map((column) => ({
+      ...column,
+      cards: column.cards?.filter((card) => {
+        const matchesQuery =
+          !searchQuery ||
+          card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          card.description?.toLowerCase().includes(searchQuery.toLowerCase())
+
+        const matchesPriority =
+          !searchFilters.priority || card.priority === searchFilters.priority
+
+        const matchesStatus =
+          searchFilters.completed === undefined ||
+          card.completed === searchFilters.completed
+
+        return matchesQuery && matchesPriority && matchesStatus
+      }),
+    }))
+  }
+
+  const calculateStats = () => {
+    let totalCards = 0
+    let completedCards = 0
+    let overdueCards = 0
+
+    columns.forEach((column) => {
+      const cards = column.cards || []
+      totalCards += cards.length
+      completedCards += cards.filter((c) => c.completed).length
+      overdueCards += cards.filter((c) => c.overdue).length
+    })
+
+    return {
+      totalCards,
+      completedCards,
+      overdueCards,
+      totalColumns: columns.length,
     }
   }
 
-  if (projectLoading || columnsLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Spin size="large" />
-      </div>
-    )
-  }
+  const stats = calculateStats()
+  const filteredColumns = getFilteredColumns()
 
-  const columnIds = columns.map((col) => col.id)
+  const actions = (
+    <Space>
+      <Button
+        icon={<BarChartOutlined />}
+        onClick={() => setShowStats(!showStats)}
+      >
+        {showStats ? 'Hide Stats' : 'Show Stats'}
+      </Button>
+      <Button icon={<TeamOutlined />}>Team</Button>
+      <Dropdown
+        menu={{
+          items: [
+            {
+              key: 'settings',
+              icon: <SettingOutlined />,
+              label: 'Project Settings',
+            },
+          ],
+        }}
+      >
+        <Button icon={<SettingOutlined />}>Settings</Button>
+      </Dropdown>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() =>
+          createColumn({
+            name: `New Column ${columns.length + 1}`,
+            color: '#' + Math.floor(Math.random() * 16777215).toString(16),
+          })
+        }
+      >
+        Add Column
+      </Button>
+    </Space>
+  )
 
   return (
-    <div className="h-full">
-      <div className="mb-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold">{currentProject?.name}</h1>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setIsColumnModalOpen(true)}
-        >
-          Add Column
-        </Button>
-      </div>
+    <div className="h-full flex flex-col">
+      <PageHeader
+        title={project?.name || 'Project Board'}
+        breadcrumbs={[{ title: 'Projects', path: '/' }, { title: project?.name || '' }]}
+        actions={actions}
+      />
 
-      <DndContext
-        collisionDetection={closestCorners}
-        onDragEnd={handleDragEnd}
-        onDragStart={handleDragStart}
-      >
-        <SortableContext
-          items={columnIds}
-          strategy={horizontalListSortingStrategy}
-        >
-          <Board columns={columns} />
-        </SortableContext>
+      {showStats && <ProjectStats {...stats} />}
 
-        <DragOverlay>
-          {activeCard && <Card card={activeCard} isDragging />}
-        </DragOverlay>
-      </DndContext>
+      <SearchBar onSearch={handleSearch} />
+
+      {filteredColumns.length === 0 ? (
+        <Empty
+          description="No columns yet"
+          className="mt-20"
+        >
+          <Button
+            type="primary"
+            onClick={() =>
+              createColumn({
+                name: 'To Do',
+                color: '#EF4444',
+              })
+            }
+          >
+            Create First Column
+          </Button>
+        </Empty>
+      ) : (
+        <div className="flex-1 overflow-hidden">
+          <DndContext
+            collisionDetection={closestCorners}
+            onDragEnd={handleDragEnd}
+            onDragStart={(event) => {
+              const cardId = event.active.id as string
+              for (const column of columns) {
+                const card = column.cards?.find((c) => c.id === cardId)
+                if (card) {
+                  setActiveCard(card)
+                  break
+                }
+              }
+            }}
+          >
+            <SortableContext
+              items={filteredColumns.map((col) => col.id)}
+              strategy={horizontalListSortingStrategy}
+            >
+              <Board 
+                columns={filteredColumns}
+                onEditColumn={(column) =>
+                  setEditColumnModal({ open: true, column })
+                }
+                onCreateCard={(columnId) =>
+                  setCreateCardModal({ open: true, columnId })
+                }
+              />
+            </SortableContext>
+
+            <DragOverlay>
+              {activeCard && <Card card={activeCard} isDragging />}
+            </DragOverlay>
+          </DndContext>
+        </div>
+      )}
 
       {selectedCard && (
         <CardModal
           card={selectedCard}
           open={!!selectedCard}
           onClose={() => setSelectedCard(null)}
+          onUpdate={(data) => updateCard({ id: selectedCard.id, data })}
+          onDelete={() => {
+            deleteCard(selectedCard.id)
+            setSelectedCard(null)
+          }}
         />
       )}
 
-      <Modal
-        title="Create New Column"
-        open={isColumnModalOpen}
-        onCancel={() => setIsColumnModalOpen(false)}
-        footer={null}
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={createColumnMutation.mutate}
-        >
-          <Form.Item
-            name="name"
-            label="Column Name"
-            rules={[{ required: true, message: 'Please enter column name' }]}
-          >
-            <Input placeholder="Enter column name" />
-          </Form.Item>
+      <CreateCardModal
+        open={createCardModal.open}
+        columnId={createCardModal.columnId}
+        onClose={() => setCreateCardModal({ open: false, columnId: '' })}
+        onCreate={createCard}
+      />
 
-          <Form.Item
-            name="color"
-            label="Color (Hex)"
-          >
-            <Input placeholder="#3B82F6" />
-          </Form.Item>
-
-          <Form.Item className="mb-0">
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createColumnMutation.isPending}
-              block
-            >
-              Create Column
-            </Button>
-          </Form.Item>
-        </Form>
-      </Modal>
+      <EditColumnModal
+        column={editColumnModal.column}
+        open={editColumnModal.open}
+        onClose={() => setEditColumnModal({ open: false, column: null })}
+        onSave={updateColumn}
+      />
     </div>
   )
 }
