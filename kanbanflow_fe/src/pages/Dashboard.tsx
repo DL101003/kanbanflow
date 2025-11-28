@@ -35,6 +35,8 @@ export default function Dashboard() {
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [form] = Form.useForm()
+  const [editModal, setEditModal] = useState({ open: false, project: null })
+  const [editForm] = Form.useForm()
 
   const { data, isLoading } = useQuery({
     queryKey: ['projects'],
@@ -59,6 +61,16 @@ export default function Dashboard() {
     },
   })
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Project> }) =>
+      projectsApi.updateProject(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      message.success('Project updated successfully')
+    },
+  })
+
+
   const toggleFavoriteMutation = useMutation({
     mutationFn: projectsApi.toggleFavorite,
     onSuccess: () => {
@@ -67,10 +79,66 @@ export default function Dashboard() {
   })
 
   const handleCreateProject = (values: any) => {
+    // Xử lý color từ ColorPicker
+    let colorValue = '#3B82F6' // default
+
+    if (values.color) {
+      // Nếu là object từ ColorPicker
+      if (typeof values.color === 'object' && values.color.toHexString) {
+        // Lấy hex color và cắt bỏ alpha channel
+        const hexColor = values.color.toHexString()
+        // Chỉ lấy 7 ký tự đầu (#RRGGBB)
+        colorValue = hexColor.substring(0, 7)
+      } else if (typeof values.color === 'string') {
+        // Nếu đã là string, đảm bảo chỉ có 7 ký tự
+        colorValue = values.color.substring(0, 7)
+      }
+    }
+
     createMutation.mutate({
       name: values.name,
       description: values.description,
-      color: values.color?.toHexString() || '#3B82F6',
+      color: colorValue,
+    })
+  }
+
+  const handleEditProject = (project: Project) => {
+    setEditModal({ open: true, project })
+    editForm.setFieldsValue({
+      name: project.name,
+      description: project.description,
+      color: project.color,
+    })
+  }
+
+  const handleUpdateProject = (values: any) => {
+    if (editModal.project) {
+      updateMutation.mutate({
+        id: editModal.project.id,
+        data: {
+          name: values.name,
+          description: values.description,
+          color: values.color?.substring(0, 7) || editModal.project.color,
+        },
+      })
+      setEditModal({ open: false, project: null })
+    }
+  }
+
+  const handleDeleteProject = (project: Project, event?: React.MouseEvent) => {
+    // Stop event propagation để không navigate vào project
+    if (event) {
+      event.stopPropagation()
+    }
+
+    Modal.confirm({
+      title: 'Delete Project',
+      content: `Are you sure you want to delete "${project.name}"? This action cannot be undone.`,
+      okText: 'Delete',
+      okType: 'danger',
+      onOk: () => {
+        deleteMutation.mutate(project.id)
+      },
     })
   }
 
@@ -80,22 +148,21 @@ export default function Dashboard() {
         key: 'edit',
         icon: <EditOutlined />,
         label: 'Edit',
-      },
-      {
-        key: 'delete',
-        icon: <DeleteOutlined />,
-        label: 'Delete',
-        danger: true,
-        onClick: () => {
-          Modal.confirm({
-            title: 'Delete Project',
-            content: `Are you sure you want to delete "${project.name}"?`,
-            okText: 'Delete',
-            okType: 'danger',
-            onOk: () => deleteMutation.mutate(project.id),
-          })
+        onClick: (e: any) => {
+          e.domEvent.stopPropagation() // Prevent navigation
+          handleEditProject(project)
         },
       },
+      {
+      key: 'delete',
+      icon: <DeleteOutlined />,
+      label: 'Delete',
+      danger: true,
+      onClick: (menuInfo: any) => {
+        menuInfo.domEvent.stopPropagation()
+        handleDeleteProject(project)
+      },
+    },
     ],
   })
 
@@ -110,7 +177,7 @@ export default function Dashboard() {
   const projects = data?.content || []
 
   return (
-    <div>
+    <>
       <div className="mb-6 flex justify-between items-center">
         <Title level={2}>My Projects</Title>
         <Button
@@ -226,6 +293,36 @@ export default function Dashboard() {
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+      <Modal
+        title="Edit Project"
+        open={editModal.open}
+        onCancel={() => setEditModal({ open: false, project: null })}
+        footer={null}
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+          onFinish={handleUpdateProject}
+        >
+          <Form.Item
+            name="name"
+            label="Project Name"
+            rules={[{ required: true, message: 'Please enter project name' }]}
+          >
+            <Input placeholder="Enter project name" />
+          </Form.Item>
+
+          <Form.Item name="description" label="Description">
+            <TextArea rows={4} placeholder="Enter project description" />
+          </Form.Item>
+
+          <Form.Item className="mb-0">
+            <Button type="primary" htmlType="submit" block>
+              Update Project
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
   )
 }

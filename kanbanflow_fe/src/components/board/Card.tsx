@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Card as AntCard, Tag, Avatar, Tooltip } from 'antd'
-import { CalendarOutlined, CommentOutlined, UserOutlined } from '@ant-design/icons'
+import { Card as AntCard, Tag, Button } from 'antd'
+import { CalendarOutlined } from '@ant-design/icons'
 import { format } from 'date-fns'
 import { useBoardStore } from '@/store/boardStore'
 import { cn } from '@/utils/cn'
@@ -9,7 +9,6 @@ import type { Card as CardType } from '@/types'
 
 interface CardProps {
   card: CardType
-  columnId?: string
   isDragging?: boolean
 }
 
@@ -30,13 +29,7 @@ export default function Card({ card, isDragging }: CardProps) {
     transform,
     transition,
     isDragging: isSortableDragging,
-  } = useSortable({
-    id: card.id,
-    data: {
-      type: 'Card',
-      columnId,
-    },
-  })
+  } = useSortable({ id: card.id })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -44,8 +37,12 @@ export default function Card({ card, isDragging }: CardProps) {
     opacity: isDragging || isSortableDragging ? 0.5 : 1,
   }
 
-  const handleClick = () => {
+  // Handle click - separate from drag
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Only open modal if not dragging
     if (!isDragging && !isSortableDragging) {
+      e.stopPropagation()
+      console.log('Card clicked:', card.title)
       setSelectedCard(card)
     }
   }
@@ -56,7 +53,6 @@ export default function Card({ card, isDragging }: CardProps) {
       style={style}
       {...attributes}
       {...listeners}
-      onClick={handleClick}
     >
       <AntCard
         size="small"
@@ -65,53 +61,37 @@ export default function Card({ card, isDragging }: CardProps) {
           card.completed && 'opacity-60'
         )}
         bodyStyle={{ padding: '12px' }}
+        onDoubleClick={handleCardClick} // Use double click for details
       >
-        {card.coverColor && (
-          <div
-            className="h-8 -m-3 mb-2 rounded-t"
-            style={{ backgroundColor: card.coverColor }}
-          />
-        )}
-
+        {/* Card content - keep existing */}
         <div className="space-y-2">
-          <div className="font-medium">{card.title}</div>
-
+          <div className="font-medium line-clamp-2">{card.title}</div>
+          
+          {/* Priority & Due date badges */}
           <div className="flex items-center gap-2 flex-wrap">
-            <Tag color={priorityColors[card.priority]}>{card.priority}</Tag>
-
+            <Tag color={priorityColors[card.priority]} className="m-0">
+              {card.priority}
+            </Tag>
+            
             {card.dueDate && (
-              <Tooltip title={`Due: ${format(new Date(card.dueDate), 'MMM dd, yyyy')}`}>
-                <span
-                  className={cn(
-                    'text-xs flex items-center gap-1',
-                    card.overdue ? 'text-red-500' : 'text-gray-500'
-                  )}
-                >
-                  <CalendarOutlined />
-                  {format(new Date(card.dueDate), 'MMM dd')}
-                </span>
-              </Tooltip>
-            )}
-
-            {card.commentCount > 0 && (
-              <span className="text-xs text-gray-500 flex items-center gap-1">
-                <CommentOutlined />
-                {card.commentCount}
+              <span className={cn(
+                'text-xs',
+                card.overdue ? 'text-red-500' : 'text-gray-500'
+              )}>
+                <CalendarOutlined /> {format(new Date(card.dueDate), 'MMM dd')}
               </span>
             )}
           </div>
-
-          {card.assignee && (
-            <div className="flex items-center justify-between">
-              <Avatar
-                size="small"
-                src={card.assignee.avatarUrl}
-                icon={!card.assignee.avatarUrl && <UserOutlined />}
-              >
-                {card.assignee.fullName[0]}
-              </Avatar>
-            </div>
-          )}
+          
+          {/* View Details Button */}
+          <Button 
+            size="small" 
+            type="link" 
+            onClick={handleCardClick}
+            className="p-0"
+          >
+            View Details
+          </Button>
         </div>
       </AntCard>
     </div>

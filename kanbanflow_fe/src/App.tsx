@@ -24,21 +24,23 @@ function AppContent() {
       theme={{
         algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
-          colorPrimary: '#3B82F6',
+          colorPrimary: '#3b82f6',
         },
       }}
     >
-      <Routes>
-        <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
-        <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to="/" />} />
-        
-        <Route element={isAuthenticated ? <AppLayout /> : <Navigate to="/login" />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/projects/:projectId" element={<BoardView />} />
-          <Route path="/projects/:projectId/team" element={<TeamMembers />} />
-          <Route path="/profile" element={<Profile />} />
-        </Route>
-      </Routes>
+      <div className={isDarkMode ? 'dark' : ''}>
+        <Routes>
+          <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
+          <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to="/" />} />
+          
+          <Route element={isAuthenticated ? <AppLayout /> : <Navigate to="/login" />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/projects/:projectId" element={<BoardView />} />
+            <Route path="/projects/:projectId/team" element={<TeamMembers />} />
+            <Route path="/profile" element={<Profile />} />
+          </Route>
+        </Routes>
+      </div>
     </ConfigProvider>
   )
 }

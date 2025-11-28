@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, Dropdown, Space, Empty } from 'antd'
+import { Button, Modal, Form, Input, InputNumber, Space, message, Spin } from 'antd'
 import {
   PlusOutlined,
-  SettingOutlined,
   TeamOutlined,
   BarChartOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons'
 import { DndContext, type DragEndEvent, DragOverlay, closestCorners } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
@@ -13,11 +13,7 @@ import Board from '@/components/board/Board'
 import Card from '@/components/board/Card'
 import CardModal from '@/components/board/CardModal'
 import CreateCardModal from '@/components/board/CreateCardModal'
-import EditColumnModal from '@/components/board/EditColumnModal'
-import SearchBar from '@/components/board/SearchBar'
 import ProjectStats from '@/components/stats/ProjectStats'
-import PageHeader from '@/components/common/PageHeader'
-import Loading from '@/components/common/Loading'
 import { useBoard } from '@/hooks/useBoard'
 import { useQuery } from '@tanstack/react-query'
 import { projectsApi } from '@/api/projects.api'
@@ -27,27 +23,31 @@ import type { Card as CardType, BoardColumn } from '@/types'
 export default function BoardView() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  
+  // States
   const [activeCard, setActiveCard] = useState<CardType | null>(null)
+  const [showStats, setShowStats] = useState(false)
+  const [isColumnModalOpen, setIsColumnModalOpen] = useState(false)
+  const [editingColumn, setEditingColumn] = useState<BoardColumn | null>(null)
   const [createCardModal, setCreateCardModal] = useState<{
     open: boolean
-    columnId: string
-  }>({ open: false, columnId: '' })
-  const [editColumnModal, setEditColumnModal] = useState<{
-    open: boolean
-    column: BoardColumn | null
-  }>({ open: false, column: null })
-  const [showStats, setShowStats] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchFilters, setSearchFilters] = useState({})
-
+    columnId: string | null
+  }>({ open: false, columnId: null })
+  
+  // Forms
+  const [columnForm] = Form.useForm()
+  const [editColumnForm] = Form.useForm()
+  
+  // Store
   const { selectedCard, setSelectedCard } = useBoardStore()
-
+  
+  // Queries
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => projectsApi.getProject(projectId!),
     enabled: !!projectId,
   })
-
+  
   const {
     columns,
     isLoading,
@@ -59,19 +59,39 @@ export default function BoardView() {
     deleteCard,
     moveCard,
   } = useBoard(projectId)
-
-  if (!projectId) {
-    navigate('/')
-    return null
+  
+  // Handlers
+  const handleCreateColumn = (values: any) => {
+    createColumn({
+      name: values.name,
+      color: values.color || '#3B82F6',
+    })
+    setIsColumnModalOpen(false)
+    columnForm.resetFields()
   }
-
-  if (isLoading) {
-    return <Loading fullScreen tip="Loading board..." />
+  
+  const handleEditColumn = (column: BoardColumn) => {
+    setEditingColumn(column)
+    editColumnForm.setFieldsValue({
+      name: column.name,
+      color: column.color,
+      cardLimit: column.cardLimit,
+    })
   }
-
+  
+  const handleUpdateColumn = (values: any) => {
+    if (editingColumn) {
+      updateColumn({
+        id: editingColumn.id,
+        data: values,
+      })
+      setEditingColumn(null)
+      editColumnForm.resetFields()
+    }
+  }
+  
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
-
     if (!over) return
 
     const activeId = active.id as string
@@ -113,40 +133,29 @@ export default function BoardView() {
       columnId: targetColumn.id,
       position,
     })
-
+    
     setActiveCard(null)
   }
-
-  const handleSearch = (query: string, filters: any) => {
-    setSearchQuery(query)
-    setSearchFilters(filters)
-  }
-
-  const getFilteredColumns = () => {
-    if (!searchQuery && Object.keys(searchFilters).length === 0) {
-      return columns
+  
+  const handleExport = async (format: 'csv' | 'json') => {
+    try {
+      const data = await projectsApi.exportProject(projectId!, format)
+      const blob = new Blob(
+        [format === 'csv' ? data : JSON.stringify(data, null, 2)],
+        { type: format === 'csv' ? 'text/csv' : 'application/json' }
+      )
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${project?.name || 'project'}-export.${format}`
+      a.click()
+      window.URL.revokeObjectURL(url)
+      message.success(`Exported as ${format.toUpperCase()}`)
+    } catch (error) {
+      message.error('Export failed')
     }
-
-    return columns.map((column) => ({
-      ...column,
-      cards: column.cards?.filter((card) => {
-        const matchesQuery =
-          !searchQuery ||
-          card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          card.description?.toLowerCase().includes(searchQuery.toLowerCase())
-
-        const matchesPriority =
-          !searchFilters.priority || card.priority === searchFilters.priority
-
-        const matchesStatus =
-          searchFilters.completed === undefined ||
-          card.completed === searchFilters.completed
-
-        return matchesQuery && matchesPriority && matchesStatus
-      }),
-    }))
   }
-
+  
   const calculateStats = () => {
     let totalCards = 0
     let completedCards = 0
@@ -166,140 +175,179 @@ export default function BoardView() {
       totalColumns: columns.length,
     }
   }
-
-  const stats = calculateStats()
-  const filteredColumns = getFilteredColumns()
-
-  const actions = (
-    <Space>
-      <Button
-        icon={<BarChartOutlined />}
-        onClick={() => setShowStats(!showStats)}
-      >
-        {showStats ? 'Hide Stats' : 'Show Stats'}
-      </Button>
-      <Button icon={<TeamOutlined />}>Team</Button>
-      <Dropdown
-        menu={{
-          items: [
-            {
-              key: 'settings',
-              icon: <SettingOutlined />,
-              label: 'Project Settings',
-            },
-          ],
-        }}
-      >
-        <Button icon={<SettingOutlined />}>Settings</Button>
-      </Dropdown>
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={() =>
-          createColumn({
-            name: `New Column ${columns.length + 1}`,
-            color: '#' + Math.floor(Math.random() * 16777215).toString(16),
-          })
-        }
-      >
-        Add Column
-      </Button>
-    </Space>
-  )
+  
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Spin size="large" />
+      </div>
+    )
+  }
 
   return (
     <div className="h-full flex flex-col">
-      <PageHeader
-        title={project?.name || 'Project Board'}
-        breadcrumbs={[{ title: 'Projects', path: '/' }, { title: project?.name || '' }]}
-        actions={actions}
-      />
-
-      {showStats && <ProjectStats {...stats} />}
-
-      <SearchBar onSearch={handleSearch} />
-
-      {filteredColumns.length === 0 ? (
-        <Empty
-          description="No columns yet"
-          className="mt-20"
-        >
+      {/* Header */}
+      <div className="mb-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold">{project?.name}</h1>
+        
+        <Space>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={() => handleExport('csv')}
+          >
+            Export CSV
+          </Button>
+          
+          <Button
+            icon={<TeamOutlined />}
+            onClick={() => navigate(`/projects/${projectId}/team`)}
+          >
+            Team Members
+          </Button>
+          
+          <Button
+            icon={<BarChartOutlined />}
+            onClick={() => setShowStats(!showStats)}
+          >
+            {showStats ? 'Hide Stats' : 'Show Stats'}
+          </Button>
+          
           <Button
             type="primary"
-            onClick={() =>
-              createColumn({
-                name: 'To Do',
-                color: '#EF4444',
-              })
-            }
+            icon={<PlusOutlined />}
+            onClick={() => setIsColumnModalOpen(true)}
           >
-            Create First Column
+            Add Column
           </Button>
-        </Empty>
-      ) : (
-        <div className="flex-1 overflow-hidden">
-          <DndContext
-            collisionDetection={closestCorners}
-            onDragEnd={handleDragEnd}
-            onDragStart={(event) => {
-              const cardId = event.active.id as string
-              for (const column of columns) {
-                const card = column.cards?.find((c) => c.id === cardId)
-                if (card) {
-                  setActiveCard(card)
-                  break
-                }
+        </Space>
+      </div>
+      
+      {/* Stats */}
+      {showStats && <ProjectStats {...calculateStats()} />}
+      
+      {/* Board */}
+      <div className="flex-1 overflow-hidden">
+        <DndContext
+          collisionDetection={closestCorners}
+          onDragEnd={handleDragEnd}
+          onDragStart={(event) => {
+            const cardId = event.active.id as string
+            for (const column of columns) {
+              const card = column.cards?.find((c) => c.id === cardId)
+              if (card) {
+                setActiveCard(card)
+                break
               }
-            }}
+            }
+          }}
+        >
+          <SortableContext
+            items={columns.map((col) => col.id)}
+            strategy={horizontalListSortingStrategy}
           >
-            <SortableContext
-              items={filteredColumns.map((col) => col.id)}
-              strategy={horizontalListSortingStrategy}
-            >
-              <Board 
-                columns={filteredColumns}
-                onEditColumn={(column) =>
-                  setEditColumnModal({ open: true, column })
-                }
-                onCreateCard={(columnId) =>
-                  setCreateCardModal({ open: true, columnId })
-                }
-              />
-            </SortableContext>
-
-            <DragOverlay>
-              {activeCard && <Card card={activeCard} isDragging />}
-            </DragOverlay>
-          </DndContext>
-        </div>
-      )}
-
+            <Board
+              columns={columns}
+              onEditColumn={handleEditColumn}
+              onCreateCard={(columnId) => {
+                setCreateCardModal({ open: true, columnId })
+              }}
+            />
+          </SortableContext>
+          
+          <DragOverlay>
+            {activeCard && <Card card={activeCard} isDragging />}
+          </DragOverlay>
+        </DndContext>
+      </div>
+      
+      {/* Card Detail Modal */}
       {selectedCard && (
         <CardModal
           card={selectedCard}
           open={!!selectedCard}
           onClose={() => setSelectedCard(null)}
-          onUpdate={(data) => updateCard({ id: selectedCard.id, data })}
+          onUpdate={(data) => {
+            updateCard({ id: selectedCard.id, data })
+          }}
           onDelete={() => {
             deleteCard(selectedCard.id)
             setSelectedCard(null)
           }}
         />
       )}
-
-      <CreateCardModal
-        open={createCardModal.open}
-        columnId={createCardModal.columnId}
-        onClose={() => setCreateCardModal({ open: false, columnId: '' })}
-        onCreate={createCard}
-      />
-
-      <EditColumnModal
-        column={editColumnModal.column}
-        open={editColumnModal.open}
-        onClose={() => setEditColumnModal({ open: false, column: null })}
-        onSave={updateColumn}
-      />
+      
+      {/* Create Card Modal */}
+      {createCardModal.columnId && (
+        <CreateCardModal
+          open={createCardModal.open}
+          columnId={createCardModal.columnId}
+          onClose={() => setCreateCardModal({ open: false, columnId: null })}
+          onCreate={(params) => {
+            createCard(params)
+            setCreateCardModal({ open: false, columnId: null }) // Auto close
+          }}
+        />
+      )}
+      
+      {/* Create Column Modal */}
+      <Modal
+        title="Create New Column"
+        open={isColumnModalOpen}
+        onCancel={() => setIsColumnModalOpen(false)}
+        footer={null}
+      >
+        <Form form={columnForm} layout="vertical" onFinish={handleCreateColumn}>
+          <Form.Item
+            name="name"
+            label="Column Name"
+            rules={[{ required: true }]}
+          >
+            <Input placeholder="Enter column name" />
+          </Form.Item>
+          
+          <Form.Item name="color" label="Color">
+            <Input placeholder="#3B82F6" maxLength={7} />
+          </Form.Item>
+          
+          <Form.Item className="mb-0">
+            <Button type="primary" htmlType="submit" block>
+              Create Column
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+      
+      {/* Edit Column Modal */}
+      <Modal
+        title="Edit Column"
+        open={!!editingColumn}
+        onCancel={() => setEditingColumn(null)}
+        footer={null}
+      >
+        <Form form={editColumnForm} layout="vertical" onFinish={handleUpdateColumn}>
+          <Form.Item
+            name="name"
+            label="Column Name"
+            rules={[{ required: true }]}
+          >
+            <Input />
+          </Form.Item>
+          
+          <Form.Item name="color" label="Color">
+            <Input placeholder="#3B82F6" maxLength={7} />
+          </Form.Item>
+          
+          <Form.Item name="cardLimit" label="Card Limit">
+            <InputNumber min={1} max={50} className="w-full" />
+          </Form.Item>
+          
+          <Form.Item className="mb-0">
+            <Button type="primary" htmlType="submit" block>
+              Update Column
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }

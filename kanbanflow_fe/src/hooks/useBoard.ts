@@ -27,7 +27,7 @@ export function useBoard(projectId: string | undefined) {
     staleTime: 30 * 1000,
   })
 
-  // Create column
+  // Create column mutation
   const createColumnMutation = useMutation({
     mutationFn: (data: { name: string; color?: string }) =>
       boardsApi.createColumn(projectId!, data),
@@ -37,7 +37,6 @@ export function useBoard(projectId: string | undefined) {
     },
   })
 
-  // Update column
   const updateColumnMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<BoardColumn> }) =>
       boardsApi.updateColumn(id, data),
@@ -45,23 +44,34 @@ export function useBoard(projectId: string | undefined) {
       queryClient.invalidateQueries({ queryKey: ['board', projectId] })
       message.success('Column updated')
     },
+    onError: (error: any) => {
+      message.error('Failed to update column')
+    },
   })
-
-  // Delete column
+  
+  // Delete column mutation
   const deleteColumnMutation = useMutation({
     mutationFn: (columnId: string) => boardsApi.deleteColumn(columnId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', projectId] })
       message.success('Column deleted')
     },
+    onError: (error: any) => {
+      message.error('Failed to delete column')
+    },
   })
 
-  // Create card
+  const updateColumn = (params: { id: string; data: Partial<BoardColumn> }) => {
+    updateColumnMutation.mutate(params)
+  }
+  
+  const deleteColumn = (columnId: string) => {
+    deleteColumnMutation.mutate(columnId)
+  }
+
+  // Create card mutation
   const createCardMutation = useMutation({
-    mutationFn: ({
-      columnId,
-      data,
-    }: {
+    mutationFn: async (params: {
       columnId: string
       data: {
         title: string
@@ -69,14 +79,21 @@ export function useBoard(projectId: string | undefined) {
         priority?: Priority
         dueDate?: string
       }
-    }) => boardsApi.createCard(columnId, data),
+    }) => {
+      console.log('createCardMutation called with:', params)
+      return boardsApi.createCard(params.columnId, params.data)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', projectId] })
-      message.success('Card created')
+      message.success('Card created successfully')
+    },
+    onError: (error: any) => {
+      console.error('Failed to create card:', error)
+      message.error('Failed to create card')
     },
   })
 
-  // Update card
+  // Update card mutation
   const updateCardMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Card> }) =>
       boardsApi.updateCard(id, data),
@@ -86,7 +103,7 @@ export function useBoard(projectId: string | undefined) {
     },
   })
 
-  // Delete card
+  // Delete card mutation
   const deleteCardMutation = useMutation({
     mutationFn: (cardId: string) => boardsApi.deleteCard(cardId),
     onSuccess: () => {
@@ -95,7 +112,7 @@ export function useBoard(projectId: string | undefined) {
     },
   })
 
-  // Move card
+  // Move card mutation
   const moveCardMutation = useMutation({
     mutationFn: ({
       cardId,
@@ -106,56 +123,51 @@ export function useBoard(projectId: string | undefined) {
       columnId: string
       position: number
     }) => boardsApi.moveCard(cardId, columnId, position),
-    onMutate: async ({ cardId, columnId, position }) => {
-      // Optimistic update
-      await queryClient.cancelQueries({ queryKey: ['board', projectId] })
-      
-      const previousColumns = queryClient.getQueryData<BoardColumn[]>(['board', projectId])
-      
-      if (previousColumns) {
-        // Find source column and card
-        let sourceColumn: BoardColumn | undefined
-        let card: Card | undefined
-        
-        for (const col of previousColumns) {
-          const foundCard = col.cards?.find(c => c.id === cardId)
-          if (foundCard) {
-            sourceColumn = col
-            card = foundCard
-            break
-          }
-        }
-        
-        if (sourceColumn && card) {
-          // Update local state optimistically
-          moveCard(cardId, sourceColumn.id, columnId, position)
-        }
-      }
-      
-      return { previousColumns }
-    },
-    onError: (err, variables, context) => {
-      // Revert on error
-      if (context?.previousColumns) {
-        queryClient.setQueryData(['board', projectId], context.previousColumns)
-      }
-      message.error('Failed to move card')
-    },
-    onSettled: () => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', projectId] })
     },
   })
 
+  // ✅ WRAP CÁC FUNCTIONS ĐỂ GIỮ CONTEXT
+  const createCard = (params: {
+    columnId: string
+    data: {
+      title: string
+      description?: string
+      priority?: Priority
+      dueDate?: string
+    }
+  }) => {
+    console.log('useBoard.createCard wrapper called with:', params)
+    createCardMutation.mutate(params)
+  }
+
+  const updateCard = (params: { id: string; data: Partial<Card> }) => {
+    updateCardMutation.mutate(params)
+  }
+
+  const deleteCard = (cardId: string) => {
+    deleteCardMutation.mutate(cardId)
+  }
+
+  const handleMoveCard = (params: {
+    cardId: string
+    columnId: string
+    position: number
+  }) => {
+    moveCardMutation.mutate(params)
+  }
+
   return {
     columns: columns || [],
     isLoading,
-    createColumn: createColumnMutation.mutate,
-    updateColumn: updateColumnMutation.mutate,
-    deleteColumn: deleteColumnMutation.mutate,
-    createCard: createCardMutation.mutate,
-    updateCard: updateCardMutation.mutate,
-    deleteCard: deleteCardMutation.mutate,
-    moveCard: moveCardMutation.mutate,
+    createColumn: (data: { name: string; color?: string }) => createColumnMutation.mutate(data),
+    updateColumn, // TODO: implement
+    deleteColumn, // TODO: implement
+    createCard, // ✅ Dùng wrapped function
+    updateCard, // ✅ Dùng wrapped function
+    deleteCard, // ✅ Dùng wrapped function
+    moveCard: handleMoveCard, // ✅ Dùng wrapped function
     isCreatingColumn: createColumnMutation.isPending,
     isCreatingCard: createCardMutation.isPending,
   }

@@ -14,11 +14,23 @@ interface ShortcutConfig {
 export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]) {
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
+      if (!event.key) return;
       shortcuts.forEach((shortcut) => {
+
+        if (!shortcut || !shortcut.key) return;
         const matchesKey = event.key.toLowerCase() === shortcut.key.toLowerCase()
-        const matchesCtrl = shortcut.ctrlKey ? event.ctrlKey || event.metaKey : true
-        const matchesShift = shortcut.shiftKey ? event.shiftKey : true
-        const matchesAlt = shortcut.altKey ? event.altKey : true
+
+        const requiresCtrl = shortcut.ctrlKey ?? false;
+        const requiresShift = shortcut.shiftKey ?? false;
+        const requiresAlt = shortcut.altKey ?? false;
+
+        const eventHasCtrl = event.ctrlKey || event.metaKey;
+        const eventHasShift = event.shiftKey;
+        const eventHasAlt = event.altKey;
+
+        const matchesCtrl = requiresCtrl === eventHasCtrl;
+        const matchesShift = requiresShift === eventHasShift;
+        const matchesAlt = requiresAlt === eventHasAlt;
 
         if (matchesKey && matchesCtrl && matchesShift && matchesAlt) {
           event.preventDefault()

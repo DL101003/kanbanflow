@@ -51,15 +51,19 @@ export default function TeamMembers() {
 
   const addMemberMutation = useMutation({
     mutationFn: (data: { email: string; role: string }) =>
-      projectsApi.addProjectMember(projectId!, data),
+      // Backend cần email, không phải userId
+      projectsApi.addProjectMember(projectId!, {
+        email: data.email,
+        role: data.role,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-members', projectId] })
       message.success('Member added successfully')
       setIsModalOpen(false)
       form.resetFields()
     },
-    onError: () => {
-      message.error('Failed to add member')
+    onError: (error: any) => {
+      message.error(error.response?.data?.message || 'Failed to add member')
     },
   })
 

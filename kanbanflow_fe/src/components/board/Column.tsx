@@ -48,10 +48,30 @@ export default function Column({ column, onEdit, onAddCard }: ColumnProps) {
   const deleteColumnMutation = useMutation({
     mutationFn: () => boardsApi.deleteColumn(column.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['board'] })
+      // Invalidate đúng query key
+      queryClient.invalidateQueries({ queryKey: ['board', projectId] })
       message.success('Column deleted')
     },
+    onError: (error: any) => {
+      message.error(error.response?.data?.message || 'Failed to delete column')
+    },
   })
+
+  const handleDeleteColumn = () => {
+    // Check if column has cards
+    if (column.cards && column.cards.length > 0) {
+      message.error('Please remove all cards before deleting column')
+      return
+    }
+    
+    Modal.confirm({
+      title: 'Delete Column',
+      content: `Are you sure you want to delete "${column.name}"?`,
+      okText: 'Delete',
+      okType: 'danger',
+      onOk: () => deleteColumnMutation.mutate(),
+    })
+  }
 
   const handleAddCard = () => {
     if (newCardTitle.trim()) {
@@ -72,15 +92,7 @@ export default function Column({ column, onEdit, onAddCard }: ColumnProps) {
         icon: <DeleteOutlined />,
         label: 'Delete',
         danger: true,
-        onClick: () => {
-          Modal.confirm({
-            title: 'Delete Column',
-            content: `Are you sure you want to delete "${column.name}"?`,
-            okText: 'Delete',
-            okType: 'danger',
-            onOk: () => deleteColumnMutation.mutate(),
-          })
-        },
+        onClick: handleDeleteColumn,
       },
     ],
   }
@@ -112,7 +124,7 @@ export default function Column({ column, onEdit, onAddCard }: ColumnProps) {
             </Dropdown>
           </div>
         }
-        bodyStyle={{ padding: '8px' }}
+        styles={{ body: { padding: '8px' } }}
       >
         <div className="space-y-2 min-h-[200px] max-h-[calc(100vh-300px)] overflow-y-auto">
           {column.cards?.map((card) => (

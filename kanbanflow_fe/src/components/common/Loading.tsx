@@ -7,17 +7,25 @@ interface LoadingProps {
 }
 
 export default function Loading({ size = 'default', fullScreen = false, tip }: LoadingProps) {
+  
+  // 1. SỬA TRƯỜNG HỢP FULLSCREEN
   if (fullScreen) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-white/80 z-50">
-        <Spin size={size} tip={tip} />
-      </div>
-    )
+    // Dùng prop 'fullscreen' có sẵn của <Spin>
+    // Nó sẽ tự động căn giữa, tạo lớp phủ và hiển thị tip bên dưới
+    return <Spin size={size} tip={tip} fullscreen />;
   }
 
+  // 2. SỬA TRƯỜNG HỢP CƠ BẢN (KHÔNG FULLSCREEN)
   return (
-    <div className="flex items-center justify-center py-12">
-      <Spin size={size} tip={tip} />
+    // Dùng flex-col để 'tip' nằm bên dưới 'Spin'
+    <div className="flex flex-col items-center justify-center py-12">
+      
+      {/* Không truyền 'tip' vào <Spin> nữa */}
+      <Spin size={size} /> 
+      
+      {/* Tự render 'tip' ở bên ngoài nếu nó tồn tại */}
+      {tip && <div className="mt-2 text-gray-500">{tip}</div>}
+      
     </div>
-  )
+  );
 }

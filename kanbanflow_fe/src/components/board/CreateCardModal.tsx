@@ -1,10 +1,19 @@
 import { Modal, Form, Input, Select, DatePicker, message } from 'antd'
+import type { Priority } from '@/types'
 
 interface CreateCardModalProps {
   open: boolean
   columnId: string
   onClose: () => void
-  onCreate: (columnId: string, data: any) => void
+  onCreate: (params: {
+    columnId: string
+    data: {
+      title: string
+      description?: string
+      priority?: Priority
+      dueDate?: string
+    }
+  }) => void // ✅ Update type để nhận cả object
 }
 
 const { TextArea } = Input
@@ -15,15 +24,33 @@ export default function CreateCardModal({ open, columnId, onClose, onCreate }: C
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
-      onCreate(columnId, {
-        ...values,
-        dueDate: values.dueDate?.format('YYYY-MM-DD'),
+      
+      const cardData = {
+        title: values.title,
+        description: values.description,
+        priority: values.priority || 'MEDIUM' as Priority,
+        dueDate: values.dueDate ? values.dueDate.format('YYYY-MM-DD') : undefined,
+      }
+      
+      console.log('CreateCardModal - Submitting with columnId:', columnId)
+      console.log('CreateCardModal - Card data:', cardData)
+      
+      // ✅ GỌI onCreate VỚI CẢ columnId VÀ data
+      onCreate({
+        columnId: columnId,
+        data: cardData
       })
+      
       form.resetFields()
-      onClose()
     } catch (error) {
+      console.error('Form validation error:', error)
       message.error('Please fill required fields')
     }
+  }
+
+  const handleCancel = () => {
+    form.resetFields()
+    onClose()
   }
 
   return (
@@ -31,17 +58,25 @@ export default function CreateCardModal({ open, columnId, onClose, onCreate }: C
       title="Create New Card"
       open={open}
       onOk={handleSubmit}
-      onCancel={onClose}
+      onCancel={handleCancel}
       destroyOnHidden
       width={600}
+      okText="Create"
+      cancelText="Cancel"
     >
-      <Form form={form} layout="vertical">
+      <Form 
+        form={form} 
+        layout="vertical"
+        initialValues={{
+          priority: 'MEDIUM'
+        }}
+      >
         <Form.Item
           name="title"
           label="Title"
           rules={[{ required: true, message: 'Please enter card title' }]}
         >
-          <Input placeholder="Enter card title" />
+          <Input placeholder="Enter card title" autoFocus />
         </Form.Item>
 
         <Form.Item name="description" label="Description">
@@ -59,7 +94,7 @@ export default function CreateCardModal({ open, columnId, onClose, onCreate }: C
           </Form.Item>
 
           <Form.Item name="dueDate" label="Due Date">
-            <DatePicker className="w-full" />
+            <DatePicker className="w-full" format="YYYY-MM-DD" />
           </Form.Item>
         </div>
       </Form>
