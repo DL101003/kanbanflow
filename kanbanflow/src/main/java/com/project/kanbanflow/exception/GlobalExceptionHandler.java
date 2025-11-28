@@ -17,6 +17,16 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException ex) {
+        ErrorResponse error = ErrorResponse.builder()
+                .status(400)
+                .message(ex.getMessage())
+                .timestamp(Instant.now())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
     @ExceptionHandler(ChangeSetPersister.NotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(ChangeSetPersister.NotFoundException ex) {
         ErrorResponse error = ErrorResponse.builder()
@@ -65,10 +75,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception ex) {
-        log.error("Unexpected error", ex);
+        log.error("Unexpected error: ", ex);
+
+        String message = "Internal server error";
+        if (!"prod".equals(System.getProperty("spring.profiles.active"))) {
+            message = ex.getMessage() != null ? ex.getMessage() : "Unknown error";
+        }
+
         ErrorResponse error = ErrorResponse.builder()
                 .status(500)
-                .message("Internal server error")
+                .message(message)
                 .timestamp(Instant.now())
                 .build();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);

@@ -5,6 +5,7 @@ import com.project.kanbanflow.entity.base.BaseEntity;
 import com.project.kanbanflow.entity.enums.ProjectRole;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
@@ -33,7 +34,8 @@ public class Project extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Size(max = 7)
+    @Size(max = 7, min = 7, message = "Color must be exactly 7 characters")
+    @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "Color must be a valid hex color")
     @Column(length = 7)
     @Builder.Default
     private String color = "#3B82F6";
@@ -55,29 +57,4 @@ public class Project extends BaseEntity {
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ProjectMember> members = new ArrayList<>();
-
-    public void addMember(User user, ProjectRole role) {
-        ProjectMember member = ProjectMember.builder()
-                .projectId(this.getId())
-                .userId(user.getId())
-                .project(this)
-                .user(user)
-                .role(role)
-                .build();
-        members.add(member);
-    }
-
-    public void removeMember(User user) {
-        members.removeIf(m -> m.getUserId().equals(user.getId()));
-    }
-
-    public void addColumn(BoardColumn column) {
-        columns.add(column);
-        column.setProject(this);
-    }
-
-    public void removeColumn(BoardColumn column) {
-        columns.remove(column);
-        column.setProject(null);
-    }
 }

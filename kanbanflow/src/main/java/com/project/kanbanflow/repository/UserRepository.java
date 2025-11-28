@@ -28,4 +28,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             "LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
             "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :query, '%'))) ")
     List<User> searchByEmailOrUsername(@Param("query") String query);
+
+    Optional<User> findByEmail(String email);
 }

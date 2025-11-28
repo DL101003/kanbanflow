@@ -8,6 +8,7 @@ import com.project.kanbanflow.entity.BoardColumn;
 import com.project.kanbanflow.entity.Card;
 import com.project.kanbanflow.entity.Project;
 import com.project.kanbanflow.entity.User;
+import com.project.kanbanflow.entity.enums.Priority;
 import com.project.kanbanflow.exception.BadRequestException;
 import com.project.kanbanflow.exception.NotFoundException;
 import com.project.kanbanflow.repository.BoardColumnRepository;
@@ -61,7 +62,20 @@ public class BoardService {
     }
 
     public void deleteColumn(UUID columnId) {
+        BoardColumn column = columnRepository.findById(columnId)
+                .orElseThrow(() -> new NotFoundException("Column not found"));
 
+        List<Card> cards = cardRepository.findByBoardColumnIdOrderByPositionAsc(columnId);
+        if (!cards.isEmpty()) {
+            throw new BadRequestException("Cannot delete column with cards. Please move or delete all cards first.");
+        }
+
+        columnRepository.deleteById(columnId);
+
+        columnRepository.decrementPositionsAfter(
+                column.getProject().getId(),
+                column.getPosition()
+        );
     }
 
     public void moveColumn(UUID columnId, Integer newPosition) {
@@ -100,10 +114,15 @@ public class BoardService {
                 .orElseThrow(() -> new NotFoundException("Column not found"));
 
         // Check card limit
-        if (column.getCardLimit() == 0) {
-            long currentCards = cardRepository.countByBoardColumnId(columnId);
+        if (column.getCardLimit() != 0) {
+            List<Card> existingCards = cardRepository.findByBoardColumnIdOrderByPositionAsc(columnId);
+            int currentCards = existingCards.size();
+
             if (currentCards >= column.getCardLimit()) {
-                throw new BadRequestException("Column card limit reached");
+                throw new BadRequestException(
+                        String.format("Column card limit reached (%d/%d)",
+                                currentCards, column.getCardLimit())
+                );
             }
         }
 
@@ -113,7 +132,7 @@ public class BoardService {
         Card card = Card.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
-                .priority(request.getPriority())
+                .priority(Priority.valueOf(request.getPriority()))
                 .dueDate(request.getDueDate())
                 .position(maxPosition + 1)
                 .boardColumn(column)
@@ -147,31 +166,56 @@ public class BoardService {
         BoardColumn targetColumn = columnRepository.findById(targetColumnId)
                 .orElseThrow(() -> new NotFoundException("Column not found"));
 
-        // Check card limit of target column
-        if (targetColumn.getCardLimit() == 0 && !targetColumnId.equals(card.getBoardColumn().getId())) {
-            long currentCards = cardRepository.countByBoardColumnId(targetColumnId);
-            if (currentCards >= targetColumn.getCardLimit()) {
-                throw new BadRequestException("Target column card limit reached");
+        // Check card limit PROPERLY
+        if (targetColumn.getCardLimit() != 0 &&
+                !targetColumnId.equals(card.getBoardColumn().getId())) {
+
+            // Count cards in target column
+            List<Card> cardsInTargetColumn = cardRepository
+                    .findByBoardColumnIdOrderByPositionAsc(targetColumnId);
+
+            int currentCardCount = cardsInTargetColumn.size();
+
+            if (currentCardCount >= targetColumn.getCardLimit()) {
+                throw new BadRequestException(
+                        String.format("Column '%s' has reached its card limit (%d/%d)",
+                                targetColumn.getName(),
+                                currentCardCount,
+                                targetColumn.getCardLimit())
+                );
             }
         }
 
-        // Remove from old position
+        // Handle position updates
         UUID oldColumnId = card.getBoardColumn().getId();
-        Integer oldPosition = card.getPosition();
+        int oldPosition = card.getPosition();
 
         // If moving within same column
         if (oldColumnId.equals(targetColumnId)) {
-            if (position > oldPosition) {
-                cardRepository.decrementPositionsBetween(oldColumnId, oldPosition, position);
-            } else if (position < oldPosition) {
-                cardRepository.incrementPositionsBetween(oldColumnId, position, oldPosition);
+            if (!position.equals(oldPosition)) {
+                // Reorder within column
+                if (position > oldPosition) {
+                    // Moving down
+                    cardRepository.decrementPositionsBetween(
+                            oldColumnId, oldPosition + 1, position
+                    );
+                } else {
+                    // Moving up
+                    cardRepository.incrementPositionsBetween(
+                            oldColumnId, position, oldPosition - 1
+                    );
+                }
             }
         } else {
             // Moving to different column
+            // Update positions in old column
             cardRepository.decrementPositionsAfter(oldColumnId, oldPosition);
+
+            // Make space in new column
             cardRepository.incrementPositionsFrom(targetColumnId, position);
         }
 
+        // Update card
         card.setBoardColumn(targetColumn);
         card.setPosition(position);
 

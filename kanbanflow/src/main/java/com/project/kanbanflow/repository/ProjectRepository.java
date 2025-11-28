@@ -14,8 +14,10 @@ import java.util.UUID;
 @Repository
 public interface ProjectRepository extends JpaRepository<Project, UUID> {
 
-    @Query("SELECT p FROM Project p LEFT JOIN ProjectMember pm ON p.id = pm.projectId " +
-            "WHERE (p.owner.id = :userId OR pm.userId = :userId)")
+    @Query("SELECT DISTINCT p FROM Project p " +
+            "LEFT JOIN ProjectMember pm ON p.id = pm.projectId " +
+            "WHERE (p.owner.id = :userId OR pm.userId = :userId) " +
+            "ORDER BY p.createdAt DESC")
     Page<Project> findAllAccessibleProjects(@Param("userId") UUID userId, Pageable pageable);
 
     @Query("SELECT p FROM Project p WHERE p.id = :projectId AND " +

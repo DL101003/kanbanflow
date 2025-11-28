@@ -9,8 +9,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,7 +30,11 @@ public class ProjectController {
     @GetMapping
     @Operation(summary = "Get all user projects")
     public ResponseEntity<Page<ProjectDto>> getUserProjects(
-            @PageableDefault(size = 10, sort = "createdAt,desc") Pageable pageable) {
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+
         Page<Project> projects = projectService.getUserProjects(pageable);
         return ResponseEntity.ok(projects.map(projectMapper::toDto));
     }
@@ -83,7 +87,7 @@ public class ProjectController {
     public ResponseEntity<Void> addMember(
             @PathVariable UUID projectId,
             @Valid @RequestBody AddMemberRequest request) {
-        projectService.addMember(projectId, request.getUserId(), request.getRole());
+        projectService.addMember(projectId, request.getEmail(), request.getRole());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 

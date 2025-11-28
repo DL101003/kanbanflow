@@ -50,14 +50,4 @@ public class BoardColumn extends BaseEntity {
     @OrderBy("position ASC")
     @Builder.Default
     private List<Card> cards = new ArrayList<>();
-
-    public void addCard(Card card) {
-        cards.add(card);
-        card.setBoardColumn(this);
-    }
-
-    public void removeCard(Card card) {
-        cards.remove(card);
-        card.setBoardColumn(null);
-    }
 }

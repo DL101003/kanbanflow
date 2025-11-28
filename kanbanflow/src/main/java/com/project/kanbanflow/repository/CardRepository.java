@@ -21,6 +21,9 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
 
     Page<Card> findByAssigneeId(UUID userId, Pageable pageable);
 
+    @Query("SELECT COUNT(c) FROM Card c WHERE c.boardColumn.id = :columnId")
+    int countCardsByColumnId(@Param("columnId") UUID columnId);
+
     @Query("SELECT c FROM Card c WHERE c.boardColumn.project.id = :projectId " +
             "AND (:query IS NULL OR LOWER(c.title) LIKE LOWER(CONCAT('%', :query, '%')) " +
             "OR LOWER(c.description) LIKE LOWER(CONCAT('%', :query, '%'))) " +
@@ -39,7 +42,8 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
 
     @Modifying
     @Query("UPDATE Card c SET c.position = c.position + 1 " +
-            "WHERE c.boardColumn.id = :columnId AND c.position >= :position")
+            "WHERE c.boardColumn.id = :columnId " +
+            "AND c.position >= :position")
     void incrementPositionsFrom(@Param("columnId") UUID columnId,
                                 @Param("position") Integer position);
 
@@ -51,21 +55,24 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
     long countByBoardColumnId(@Param("columnId") UUID columnId);
 
     @Modifying
-    @Query("UPDATE Card c SET c.position = c.position - 1 WHERE c.boardColumn.id = :columnId " +
+    @Query("UPDATE Card c SET c.position = c.position - 1 " +
+            "WHERE c.boardColumn.id = :columnId " +
             "AND c.position BETWEEN :start AND :end")
     void decrementPositionsBetween(@Param("columnId") UUID columnId,
                                    @Param("start") Integer start,
                                    @Param("end") Integer end);
 
     @Modifying
-    @Query("UPDATE Card c SET c.position = c.position + 1 WHERE c.boardColumn.id = :columnId " +
+    @Query("UPDATE Card c SET c.position = c.position + 1 " +
+            "WHERE c.boardColumn.id = :columnId " +
             "AND c.position BETWEEN :start AND :end")
     void incrementPositionsBetween(@Param("columnId") UUID columnId,
                                    @Param("start") Integer start,
                                    @Param("end") Integer end);
 
     @Modifying
-    @Query("UPDATE Card c SET c.position = c.position - 1 WHERE c.boardColumn.id = :columnId " +
+    @Query("UPDATE Card c SET c.position = c.position - 1 " +
+            "WHERE c.boardColumn.id = :columnId " +
             "AND c.position > :position")
     void decrementPositionsAfter(@Param("columnId") UUID columnId,
                                  @Param("position") Integer position);

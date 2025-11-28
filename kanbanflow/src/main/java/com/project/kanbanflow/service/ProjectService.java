@@ -16,6 +16,7 @@ import com.project.kanbanflow.mapper.UserMapper;
 import com.project.kanbanflow.repository.BoardColumnRepository;
 import com.project.kanbanflow.repository.ProjectMemberRepository;
 import com.project.kanbanflow.repository.ProjectRepository;
+import com.project.kanbanflow.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -34,6 +35,7 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final BoardColumnRepository columnRepository;
     private final ProjectMemberRepository memberRepository;
+    private final UserRepository userRepository;
     private final UserService userService;
     private final UserMapper userMapper;
 
@@ -118,26 +120,27 @@ public class ProjectService {
         return projectRepository.hasUserRole(projectId, userId, role);
     }
 
-    public void addMember(UUID projectId, UUID userId, ProjectRole role) {
+    public void addMember(UUID projectId, String email, ProjectRole role) {
         Project project = getProject(projectId);
         User currentUser = userService.getCurrentUser();
 
         // Check permission
-        if (!project.getOwner().getId().equals(currentUser.getId()) &&
-                !hasProjectRole(projectId, currentUser.getId(), ProjectRole.ADMIN)) {
-            throw new ForbiddenException("No permission to add members");
+        if (!project.getOwner().getId().equals(currentUser.getId())) {
+            throw new ForbiddenException("Only owner can add members");
         }
 
+        // Find user by email
+        User newMember = userRepository.findByEmail(email)
+                .orElseThrow(() -> new NotFoundException("User not found with email: " + email));
+
         // Check if already member
-        if (memberRepository.existsByProjectIdAndUserId(projectId, userId)) {
+        if (memberRepository.existsByProjectIdAndUserId(projectId, newMember.getId())) {
             throw new DuplicateException("User is already a member");
         }
 
-        User newMember = userService.getUserById(userId);
-
         ProjectMember member = ProjectMember.builder()
                 .projectId(projectId)
-                .userId(userId)
+                .userId(newMember.getId())
                 .project(project)
                 .user(newMember)
                 .role(role)

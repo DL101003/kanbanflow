@@ -73,16 +73,6 @@ public class Card extends BaseEntity {
     @Builder.Default
     private List<Comment> comments = new ArrayList<>();
 
-    public void addComment(Comment comment) {
-        comments.add(comment);
-        comment.setCard(this);
-    }
-
-    public void removeComment(Comment comment) {
-        comments.remove(comment);
-        comment.setCard(null);
-    }
-
     public boolean isOverdue() {
         return dueDate != null && LocalDate.now().isAfter(dueDate) && !completed;
     }
