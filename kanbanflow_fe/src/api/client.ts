@@ -32,8 +32,8 @@ apiClient.interceptors.response.use(
       window.location.href = '/login'
     } else if (error.response?.data?.message) {
       toast.error(error.response.data.message)
-    } else {
-      toast.error('An unexpected error occurred')
+    } else if (error.response?.status === 500) {
+      console.error('Server error:', error)
     }
     return Promise.reject(error)
   }

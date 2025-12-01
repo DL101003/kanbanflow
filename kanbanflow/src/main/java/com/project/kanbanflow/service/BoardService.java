@@ -10,11 +10,14 @@ import com.project.kanbanflow.entity.Project;
 import com.project.kanbanflow.entity.User;
 import com.project.kanbanflow.entity.enums.Priority;
 import com.project.kanbanflow.exception.BadRequestException;
+import com.project.kanbanflow.exception.DuplicateException;
+import com.project.kanbanflow.exception.ForbiddenException;
 import com.project.kanbanflow.exception.NotFoundException;
 import com.project.kanbanflow.repository.BoardColumnRepository;
 import com.project.kanbanflow.repository.CardRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -29,25 +32,84 @@ public class BoardService {
     private final CardRepository cardRepository;
     private final ProjectService projectService;
     private final UserService userService;
+    private final ActivityService activityService;
+
+    private void checkEditPermission(UUID projectId) {
+        User currentUser = userService.getCurrentUser();
+        if (!projectService.canUserEditProject(projectId, currentUser.getId())) {
+            throw new ForbiddenException("You don't have permission to edit this project");
+        }
+    }
+
+    public boolean canUserEditColumn(UUID columnId, UUID userId) {
+        BoardColumn column = columnRepository.findById(columnId)
+                .orElseThrow(() -> new NotFoundException("Column not found"));
+        return projectService.canUserEditProject(column.getProject().getId(), userId);
+    }
+
+    public boolean canUserEditCard(UUID cardId, UUID userId) {
+        Card card = cardRepository.findById(cardId)
+                .orElseThrow(() -> new NotFoundException("Card not found"));
+        return projectService.canUserEditProject(
+                card.getBoardColumn().getProject().getId(), userId);
+    }
 
     public List<BoardColumn> getProjectColumns(UUID projectId) {
-        projectService.getProject(projectId);
+        projectService.getProject(projectId); // Check access
         return columnRepository.findByProjectIdOrderByPositionAsc(projectId);
     }
 
     // COLUMNS
+    @Transactional
     public BoardColumn createColumn(UUID projectId, CreateColumnRequest request) {
         Project project = projectService.getProject(projectId);
-        Integer maxPosition = columnRepository.findMaxPositionByProjectId(projectId);
+        User currentUser = userService.getCurrentUser();
+
+        // Check permission
+        if (!projectService.canUserEditProject(projectId, currentUser.getId())) {
+            throw new ForbiddenException("You don't have permission to create columns");
+        }
+
+        // Get all active columns
+        List<BoardColumn> activeColumns = columnRepository
+                .findByProjectIdOrderByPositionAsc(projectId);
+
+        System.out.println("Active Columns: " + activeColumns.getLast().getPosition());
+
+        // Check for duplicate name
+        boolean nameExists = activeColumns.stream()
+                .anyMatch(col -> col.getName().equalsIgnoreCase(request.getName()));
+
+        if (nameExists) {
+            throw new DuplicateException(
+                    String.format("Column '%s' already exists", request.getName())
+            );
+        }
+
+        // Calculate next position
+        int newPosition = activeColumns.isEmpty() ? 0 :
+                activeColumns.getLast().getPosition() + 1;
 
         BoardColumn column = BoardColumn.builder()
                 .name(request.getName())
                 .color(request.getColor())
-                .position(maxPosition + 1)
+                .cardLimit(request.getCardLimit())
+                .position(newPosition)
                 .project(project)
                 .build();
 
-        return columnRepository.save(column);
+        BoardColumn savedColumn = columnRepository.save(column);
+
+        // Log activity
+        activityService.logActivity(
+                project,
+                "CREATED",
+                "COLUMN",
+                savedColumn.getId(),
+                String.format("Created column '%s'", savedColumn.getName())
+        );
+
+        return savedColumn;
     }
 
     public BoardColumn updateColumn(UUID columnId, UpdateColumnRequest request) {
@@ -61,21 +123,26 @@ public class BoardService {
         return columnRepository.save(column);
     }
 
+    @Transactional
     public void deleteColumn(UUID columnId) {
         BoardColumn column = columnRepository.findById(columnId)
                 .orElseThrow(() -> new NotFoundException("Column not found"));
 
-        List<Card> cards = cardRepository.findByBoardColumnIdOrderByPositionAsc(columnId);
-        if (!cards.isEmpty()) {
-            throw new BadRequestException("Cannot delete column with cards. Please move or delete all cards first.");
+        User currentUser = userService.getCurrentUser();
+        if (!projectService.canUserEditProject(column.getProject().getId(), currentUser.getId())) {
+            throw new ForbiddenException("You don't have permission to delete columns");
         }
 
-        columnRepository.deleteById(columnId);
+        columnRepository.delete(column);
 
-        columnRepository.decrementPositionsAfter(
-                column.getProject().getId(),
-                column.getPosition()
+        activityService.logActivity(
+                column.getProject(),
+                "DELETED",
+                "COLUMN",
+                columnId,
+                String.format("Deleted column '%s'", column.getName())
         );
+
     }
 
     public void moveColumn(UUID columnId, Integer newPosition) {
@@ -113,6 +180,8 @@ public class BoardService {
         BoardColumn column = columnRepository.findById(columnId)
                 .orElseThrow(() -> new NotFoundException("Column not found"));
 
+        checkEditPermission(column.getProject().getId());
+
         // Check card limit
         if (column.getCardLimit() != 0) {
             List<Card> existingCards = cardRepository.findByBoardColumnIdOrderByPositionAsc(columnId);
@@ -139,12 +208,26 @@ public class BoardService {
                 .createdBy(currentUser)
                 .build();
 
-        return cardRepository.save(card);
+        Card savedCard = cardRepository.save(card);
+
+        // Log activity
+        activityService.logActivity(
+                column.getProject(),
+                "CREATED",
+                "CARD",
+                savedCard.getId(),
+                String.format("Created card '%s' in column '%s'",
+                        savedCard.getTitle(), column.getName())
+        );
+
+        return savedCard;
     }
 
     public Card updateCard(UUID cardId, UpdateCardRequest request) {
         Card card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new NotFoundException("Card not found"));
+
+        checkEditPermission(card.getBoardColumn().getProject().getId());
 
         card.setTitle(request.getTitle());
         card.setDescription(request.getDescription());
@@ -156,7 +239,18 @@ public class BoardService {
             card.setCompleted(request.getCompleted());
         }
 
-        return cardRepository.save(card);
+        Card updatedCard = cardRepository.save(card);
+
+        // Log activity
+        activityService.logActivity(
+                card.getBoardColumn().getProject(),
+                "UPDATED",
+                "CARD",
+                cardId,
+                String.format("Updated card '%s'", card.getTitle())
+        );
+
+        return updatedCard;
     }
 
     public Card moveCard(UUID cardId, UUID targetColumnId, Integer position) {
@@ -219,7 +313,19 @@ public class BoardService {
         card.setBoardColumn(targetColumn);
         card.setPosition(position);
 
-        return cardRepository.save(card);
+        Card movedCard = cardRepository.save(card);
+
+        // Log activity
+        activityService.logActivity(
+                card.getBoardColumn().getProject(),
+                "MOVED",
+                "CARD",
+                cardId,
+                String.format("Moved card '%s' to column '%s'",
+                        card.getTitle(), targetColumn.getName())
+        );
+
+        return movedCard;
     }
 
     public Card assignCard(UUID cardId, UUID userId) {
@@ -237,5 +343,27 @@ public class BoardService {
     }
 
     public void deleteCard(UUID cardId) {
+        Card card = cardRepository.findById(cardId)
+                .orElseThrow(() -> new NotFoundException("Card not found"));
+
+        checkEditPermission(card.getBoardColumn().getProject().getId());
+
+        UUID columnId = card.getBoardColumn().getId();
+        Integer deletedPosition = card.getPosition();
+
+        // Delete the card (will trigger soft delete)
+        cardRepository.delete(card);
+
+        // Reorder remaining cards in the column
+        cardRepository.decrementPositionsAfter(columnId, deletedPosition);
+
+        // Log activity
+        activityService.logActivity(
+                card.getBoardColumn().getProject(),
+                "DELETED",
+                "CARD",
+                cardId,
+                String.format("Deleted card: %s", card.getTitle())
+        );
     }
 }

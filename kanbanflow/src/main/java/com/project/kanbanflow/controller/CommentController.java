@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -32,7 +33,11 @@ public class CommentController {
     @Operation(summary = "Get card comments")
     public ResponseEntity<Page<CommentDto>> getCardComments(
             @PathVariable UUID cardId,
-            @PageableDefault(size = 20, sort = "createdAt,desc") Pageable pageable) {
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+
         Page<Comment> comments = commentService.getCardComments(cardId, pageable);
         return ResponseEntity.ok(comments.map(commentMapper::toDto));
     }

@@ -11,4 +11,8 @@ import java.util.UUID;
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, UUID> {
     Page<Comment> findByCardIdOrderByCreatedAtDesc(UUID cardId, Pageable pageable);
+
+    Page<Comment> findByCardId(UUID cardId, Pageable pageable);
+
+    long countByCardIdAndDeletedFalse(UUID cardId);
 }

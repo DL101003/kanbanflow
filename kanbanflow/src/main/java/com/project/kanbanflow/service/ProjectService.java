@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -118,6 +119,28 @@ public class ProjectService {
 
     private boolean hasProjectRole(UUID projectId, UUID userId, String role) {
         return projectRepository.hasUserRole(projectId, userId, role);
+    }
+
+    public boolean canUserEditProject(UUID projectId, UUID userId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found"));
+
+        // Owner can always edit
+        if (project.getOwner().getId().equals(userId)) {
+            return true;
+        }
+
+        // Check member role
+        Optional<ProjectMember> member = memberRepository
+                .findByProjectIdAndUserId(projectId, userId);
+
+        if (member.isPresent()) {
+            ProjectRole role = member.get().getRole();
+            // Only ADMIN and EDITOR can edit
+            return role == ProjectRole.ADMIN || role == ProjectRole.EDITOR;
+        }
+
+        return false;
     }
 
     public void addMember(UUID projectId, String email, ProjectRole role) {

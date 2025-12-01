@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User, AuthResponse } from '@/types'
+import { QueryClient } from '@tanstack/react-query'
 
 interface AuthState {
   user: User | null
@@ -30,6 +31,9 @@ export const useAuthStore = create<AuthState>()(
           token: data.token,
           isAuthenticated: true,
         })
+        // Clear all cached queries after login
+        const queryClient = new QueryClient()
+        queryClient.clear()
       },
       
       logout: () => {
@@ -38,6 +42,8 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           isAuthenticated: false,
         })
+        const queryClient = new QueryClient()
+        queryClient.clear()
       },
       
       updateUser: (user: User) => {

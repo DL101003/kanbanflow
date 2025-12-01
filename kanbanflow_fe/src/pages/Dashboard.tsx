@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -37,6 +37,10 @@ export default function Dashboard() {
   const [form] = Form.useForm()
   const [editModal, setEditModal] = useState({ open: false, project: null })
   const [editForm] = Form.useForm()
+
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['projects'] })
+  }, [])
 
   const { data, isLoading } = useQuery({
     queryKey: ['projects'],
@@ -79,11 +83,9 @@ export default function Dashboard() {
   })
 
   const handleCreateProject = (values: any) => {
-    // Xử lý color từ ColorPicker
-    let colorValue = '#3B82F6' // default
+    let colorValue = '#3B82F6'
 
     if (values.color) {
-      // Nếu là object từ ColorPicker
       if (typeof values.color === 'object' && values.color.toHexString) {
         // Lấy hex color và cắt bỏ alpha channel
         const hexColor = values.color.toHexString()

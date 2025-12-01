@@ -22,7 +22,7 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
     Page<Card> findByAssigneeId(UUID userId, Pageable pageable);
 
     @Query("SELECT COUNT(c) FROM Card c WHERE c.boardColumn.id = :columnId")
-    int countCardsByColumnId(@Param("columnId") UUID columnId);
+    Long countCardsByColumnId(@Param("columnId") UUID columnId);
 
     @Query("SELECT c FROM Card c WHERE c.boardColumn.project.id = :projectId " +
             "AND (:query IS NULL OR LOWER(c.title) LIKE LOWER(CONCAT('%', :query, '%')) " +
@@ -51,8 +51,8 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
             "WHERE c.boardColumn.id = :columnId")
     Integer findMaxPositionByColumnId(@Param("columnId") UUID columnId);
 
-    @Query("SELECT c FROM Card c WHERE c.boardColumn.id = :columnId")
-    long countByBoardColumnId(@Param("columnId") UUID columnId);
+    @Query("SELECT COALESCE(COUNT(c), 0) FROM Card c WHERE c.boardColumn.id = :columnId")
+    int countByBoardColumnId(@Param("columnId") UUID columnId);
 
     @Modifying
     @Query("UPDATE Card c SET c.position = c.position - 1 " +

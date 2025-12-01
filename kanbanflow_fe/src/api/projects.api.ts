@@ -2,6 +2,12 @@ import apiClient from './client'
 import type { Project, ProjectDetail, TeamMember } from '@/types'
 
 export const projectsApi = {
+
+  getUserProjectRole: async (projectId: string): Promise<string> => {
+    const { data } = await apiClient.get(`/api/projects/${projectId}/my-role`)
+    return data
+  },
+  
   getProjects: async (page = 0, size = 10) => {
     const { data } = await apiClient.get('/api/projects', {
       params: { page, size },

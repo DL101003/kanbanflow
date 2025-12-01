@@ -6,7 +6,7 @@ import type { BoardColumn, Card, Priority } from '@/types'
 
 export function useBoard(projectId: string | undefined) {
   const queryClient = useQueryClient()
-  const { setColumns, moveCard } = useBoardStore()
+  const { setColumns, moveCard: moveCardLocal } = useBoardStore()
 
   // Fetch columns with cards
   const { data: columns, isLoading } = useQuery({
@@ -29,11 +29,14 @@ export function useBoard(projectId: string | undefined) {
 
   // Create column mutation
   const createColumnMutation = useMutation({
-    mutationFn: (data: { name: string; color?: string }) =>
+    mutationFn: (data: { name: string; color?: string; cardLimit?: number }) =>
       boardsApi.createColumn(projectId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', projectId] })
-      message.success('Column created')
+      message.success('Column created successfully')
+    },
+    onError: (error: any) => {
+      console.error('Create column error:', error)
     },
   })
 
@@ -48,26 +51,31 @@ export function useBoard(projectId: string | undefined) {
       message.error('Failed to update column')
     },
   })
-  
+
   // Delete column mutation
   const deleteColumnMutation = useMutation({
-    mutationFn: (columnId: string) => boardsApi.deleteColumn(columnId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['board', projectId] })
-      message.success('Column deleted')
-    },
-    onError: (error: any) => {
-      message.error('Failed to delete column')
-    },
-  })
-
-  const updateColumn = (params: { id: string; data: Partial<BoardColumn> }) => {
-    updateColumnMutation.mutate(params)
-  }
-  
-  const deleteColumn = (columnId: string) => {
-    deleteColumnMutation.mutate(columnId)
-  }
+  mutationFn: (columnId: string) => boardsApi.deleteColumn(columnId),
+  onSuccess: () => {
+    // Force refetch with no cache
+    queryClient.invalidateQueries({ 
+      queryKey: ['board', projectId],
+      exact: true,
+      refetchType: 'all' 
+    })
+    
+    // Also refetch immediately
+    queryClient.refetchQueries({ 
+      queryKey: ['board', projectId],
+      type: 'active'
+    })
+    
+    message.success('Column deleted successfully')
+  },
+  onError: (error: any) => {
+    message.error('Failed to delete column')
+    console.error('Delete column error:', error)
+  },
+})
 
   // Create card mutation
   const createCardMutation = useMutation({
@@ -108,7 +116,10 @@ export function useBoard(projectId: string | undefined) {
     mutationFn: (cardId: string) => boardsApi.deleteCard(cardId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', projectId] })
-      message.success('Card deleted')
+      message.success('Card deleted successfully', 2) // Duration 2s
+    },
+    onError: (error: any) => {
+      console.error('Delete card error:', error)
     },
   })
 
@@ -128,7 +139,6 @@ export function useBoard(projectId: string | undefined) {
     },
   })
 
-  // ✅ WRAP CÁC FUNCTIONS ĐỂ GIỮ CONTEXT
   const createCard = (params: {
     columnId: string
     data: {
@@ -162,12 +172,13 @@ export function useBoard(projectId: string | undefined) {
     columns: columns || [],
     isLoading,
     createColumn: (data: { name: string; color?: string }) => createColumnMutation.mutate(data),
-    updateColumn, // TODO: implement
-    deleteColumn, // TODO: implement
-    createCard, // ✅ Dùng wrapped function
-    updateCard, // ✅ Dùng wrapped function
-    deleteCard, // ✅ Dùng wrapped function
-    moveCard: handleMoveCard, // ✅ Dùng wrapped function
+    updateColumn: (params: { id: string; data: Partial<BoardColumn> }) =>
+      updateColumnMutation.mutate(params),
+    deleteColumn: (columnId: string) => deleteColumnMutation.mutate(columnId),
+    createCard,
+    updateCard,
+    deleteCard,
+    moveCard: handleMoveCard,
     isCreatingColumn: createColumnMutation.isPending,
     isCreatingCard: createCardMutation.isPending,
   }

@@ -19,6 +19,7 @@ interface CardModalProps {
 
 export default function CardModal({ card, open, onClose, onUpdate, onDelete }: CardModalProps) {
   const [form] = Form.useForm()
+  const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('details')
 
   useEffect(() => {
@@ -32,26 +33,44 @@ export default function CardModal({ card, open, onClose, onUpdate, onDelete }: C
 
   const handleSave = async () => {
     try {
+      setLoading(true)
       const values = await form.validateFields()
-      onUpdate?.({
+      
+      const updateData = {
         ...values,
         dueDate: values.dueDate ? values.dueDate.format('YYYY-MM-DD') : null,
-      })
-      message.success('Card updated')
+      }
+      
+      // Call update callback
+      if (onUpdate) {
+        await onUpdate(updateData)
+        message.success('Card updated successfully')
+        
+        // Close modal after successful update
+        setTimeout(() => {
+          onClose()
+        }, 500)
+      }
     } catch (error) {
-      message.error('Please check the form')
+      console.error('Update error:', error)
+      message.error('Failed to update card')
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleDelete = () => {
     Modal.confirm({
       title: 'Delete Card',
-      content: 'Are you sure you want to delete this card?',
+      content: `Are you sure you want to delete "${card.title}"?`,
       okText: 'Delete',
       okType: 'danger',
-      onOk: () => {
-        onDelete?.()
-        onClose()
+      onOk: async () => {
+        if (onDelete) {
+          await onDelete()
+          message.success('Card deleted successfully')
+          onClose()
+        }
       },
     })
   }
@@ -63,10 +82,21 @@ export default function CardModal({ card, open, onClose, onUpdate, onDelete }: C
       onCancel={onClose}
       width={800}
       footer={[
-        <Button key="delete" danger icon={<DeleteOutlined />} onClick={handleDelete}>
+        <Button 
+          key="delete" 
+          danger 
+          icon={<DeleteOutlined />} 
+          onClick={handleDelete}
+        >
           Delete
         </Button>,
-        <Button key="save" type="primary" icon={<SaveOutlined />} onClick={handleSave}>
+        <Button 
+          key="save" 
+          type="primary" 
+          icon={<SaveOutlined />} 
+          onClick={handleSave}
+          loading={loading}
+        >
           Save
         </Button>,
         <Button key="close" onClick={onClose}>
@@ -96,7 +126,7 @@ export default function CardModal({ card, open, onClose, onUpdate, onDelete }: C
               </Form.Item>
 
               <Form.Item name="dueDate" label="Due Date">
-                <DatePicker className="w-full" />
+                <DatePicker className="w-full" format="YYYY-MM-DD" />
               </Form.Item>
             </div>
 
@@ -109,7 +139,7 @@ export default function CardModal({ card, open, onClose, onUpdate, onDelete }: C
           </Form>
         </TabPane>
 
-        <TabPane tab={`Comments (${card.commentCount})`} key="comments">
+        <TabPane tab={`Comments (${card.commentCount || 0})`} key="comments">
           <CommentSection cardId={card.id} />
         </TabPane>
 

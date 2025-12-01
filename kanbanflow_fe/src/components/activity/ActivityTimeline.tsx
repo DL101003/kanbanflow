@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Timeline, Avatar, Typography, Empty, Spin } from 'antd'
 import { UserOutlined, FileAddOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { formatDistanceToNow } from 'date-fns'
+import { apiClient } from '@/api/client' // Use apiClient instead of fetch
 
 const { Text } = Typography
 
@@ -22,21 +23,17 @@ interface ActivityTimelineProps {
   cardId?: string
 }
 
-const actionIcons = {
-  CREATE: <FileAddOutlined />,
-  UPDATE: <EditOutlined />,
-  DELETE: <DeleteOutlined />,
-}
-
 export default function ActivityTimeline({ projectId, cardId }: ActivityTimelineProps) {
   const { data: activities, isLoading } = useQuery({
     queryKey: ['activities', projectId, cardId],
-    queryFn: () => {
+    queryFn: async () => {
       if (cardId) {
-        return fetch(`/api/cards/${cardId}/activities`).then(res => res.json())
+        const { data } = await apiClient.get(`/api/cards/${cardId}/activities`)
+        return data
       }
       if (projectId) {
-        return fetch(`/api/projects/${projectId}/activities`).then(res => res.json())
+        const { data } = await apiClient.get(`/api/projects/${projectId}/activities`)
+        return data
       }
       return []
     },
@@ -44,7 +41,9 @@ export default function ActivityTimeline({ projectId, cardId }: ActivityTimeline
   })
 
   if (isLoading) return <Spin />
-  if (!activities || activities.length === 0) return <Empty description="No activities yet" />
+  if (!activities || activities.length === 0) {
+    return <Empty description="No activities yet" />
+  }
 
   return (
     <Timeline>
@@ -53,7 +52,7 @@ export default function ActivityTimeline({ projectId, cardId }: ActivityTimeline
           key={activity.id}
           dot={
             <Avatar size="small" src={activity.user.avatarUrl} icon={<UserOutlined />}>
-              {activity.user.fullName[0]}
+              {activity.user.fullName?.[0]}
             </Avatar>
           }
         >

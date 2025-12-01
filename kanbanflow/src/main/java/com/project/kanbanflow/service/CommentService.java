@@ -12,7 +12,9 @@ import com.project.kanbanflow.repository.CommentRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -31,7 +33,15 @@ public class CommentService {
         if (!cardRepository.existsById(cardId)) {
             throw new NotFoundException("Card not found");
         }
-        return commentRepository.findByCardIdOrderByCreatedAtDesc(cardId, pageable);
+
+        // Create custom pageable with sort
+        Pageable sortedPageable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        return commentRepository.findByCardId(cardId, sortedPageable);
     }
 
     public Comment addComment(UUID cardId, CreateCommentRequest request) {

@@ -30,4 +30,10 @@ public interface BoardColumnRepository extends JpaRepository<BoardColumn, UUID> 
             "WHERE bc.project.id = :projectId AND bc.position > :position")
     void decrementPositionsAfter(@Param("projectId") UUID projectId,
                                  @Param("position") Integer position);
+
+    @Modifying
+    @Query("UPDATE BoardColumn bc SET bc.position = :newPosition " +
+            "WHERE bc.id = :columnId")
+    void updatePosition(@Param("columnId") UUID columnId,
+                        @Param("newPosition") Integer newPosition);
 }

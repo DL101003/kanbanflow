@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Card as AntCard, Button, Input, Badge, Dropdown, Modal, message } from 'antd'
@@ -10,12 +11,14 @@ import type { BoardColumn } from '@/types'
 
 interface ColumnProps {
   column: BoardColumn
+  canEdit?: boolean
   onEdit?: () => void
   onAddCard?: () => void
 }
 
-export default function Column({ column, onEdit, onAddCard }: ColumnProps) {
+export default function Column({ column, canEdit = false, onEdit, onAddCard }: ColumnProps) {
   const queryClient = useQueryClient()
+  const { projectId } = useParams<{ projectId: string }>()
   const [isAddingCard, setIsAddingCard] = useState(false)
   const [newCardTitle, setNewCardTitle] = useState('')
 
@@ -26,7 +29,10 @@ export default function Column({ column, onEdit, onAddCard }: ColumnProps) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: column.id })
+  } = useSortable({ 
+    id: column.id,
+    disabled: !canEdit // Only enable drag if can edit
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -38,27 +44,43 @@ export default function Column({ column, onEdit, onAddCard }: ColumnProps) {
     mutationFn: (title: string) =>
       boardsApi.createCard(column.id, { title }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['board'] })
+      queryClient.invalidateQueries({ queryKey: ['board', projectId] })
       setIsAddingCard(false)
       setNewCardTitle('')
       message.success('Card created')
+    },
+    onError: (error: any) => {
+      console.error('Error creating card:', error)
+      message.error('Failed to create card')
     },
   })
 
   const deleteColumnMutation = useMutation({
     mutationFn: () => boardsApi.deleteColumn(column.id),
     onSuccess: () => {
-      // Invalidate đúng query key
       queryClient.invalidateQueries({ queryKey: ['board', projectId] })
       message.success('Column deleted')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Failed to delete column')
+      message.error('Failed to delete column')
     },
   })
 
+  const handleAddCard = () => {
+    if (newCardTitle.trim()) {
+      createCardMutation.mutate(newCardTitle.trim())
+    }
+  }
+
+  const handleAddCardClick = () => {
+    if (onAddCard) {
+      onAddCard()
+    } else {
+      setIsAddingCard(true)
+    }
+  }
+
   const handleDeleteColumn = () => {
-    // Check if column has cards
     if (column.cards && column.cards.length > 0) {
       message.error('Please remove all cards before deleting column')
       return
@@ -73,14 +95,8 @@ export default function Column({ column, onEdit, onAddCard }: ColumnProps) {
     })
   }
 
-  const handleAddCard = () => {
-    if (newCardTitle.trim()) {
-      createCardMutation.mutate(newCardTitle.trim())
-    }
-  }
-
   const columnMenu = {
-    items: [
+    items: canEdit ? [
       {
         key: 'edit',
         icon: <EditOutlined />,
@@ -94,7 +110,7 @@ export default function Column({ column, onEdit, onAddCard }: ColumnProps) {
         danger: true,
         onClick: handleDeleteColumn,
       },
-    ],
+    ] : [],
   }
 
   return (
@@ -108,71 +124,84 @@ export default function Column({ column, onEdit, onAddCard }: ColumnProps) {
                 className="w-3 h-3 rounded-full"
                 style={{ backgroundColor: column.color || '#94A3B8' }}
               />
-              <span {...attributes} {...listeners} className="cursor-move">
+              <span 
+                {...(canEdit ? attributes : {})} 
+                {...(canEdit ? listeners : {})} 
+                className={canEdit ? "cursor-move" : ""}
+              >
                 {column.name}
               </span>
               <Badge count={column.cards?.length || 0} showZero />
               {column.cardLimit && (
                 <Badge 
                   count={`${column.cards?.length || 0}/${column.cardLimit}`}
-                  style={{ backgroundColor: '#52c41a' }}
+                  style={{ 
+                    backgroundColor: column.cardLimit && (column.cards?.length || 0) >= column.cardLimit ? '#ff4d4f' : '#52c41a' 
+                  }}
                 />
               )}
             </div>
-            <Dropdown menu={columnMenu} trigger={['click']}>
-              <Button type="text" size="small" icon={<MoreOutlined />} />
-            </Dropdown>
+            {canEdit && columnMenu.items.length > 0 && (
+              <Dropdown menu={columnMenu} trigger={['click']}>
+                <Button type="text" size="small" icon={<MoreOutlined />} />
+              </Dropdown>
+            )}
           </div>
         }
-        styles={{ body: { padding: '8px' } }}
+        bodyStyle={{ padding: '8px' }}
       >
         <div className="space-y-2 min-h-[200px] max-h-[calc(100vh-300px)] overflow-y-auto">
           {column.cards?.map((card) => (
-            <Card key={card.id} card={card} />
+            <Card key={card.id} card={card} canEdit={canEdit} />
           ))}
 
-          {isAddingCard ? (
-            <div className="p-2 bg-white rounded border">
-              <Input.TextArea
-                value={newCardTitle}
-                onChange={(e) => setNewCardTitle(e.target.value)}
-                placeholder="Enter card title..."
-                autoSize={{ minRows: 2, maxRows: 4 }}
-                autoFocus
-                onPressEnter={(e) => {
-                  e.preventDefault()
-                  handleAddCard()
-                }}
-              />
-              <div className="mt-2 flex gap-2">
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={handleAddCard}
-                  loading={createCardMutation.isPending}
-                >
-                  Add
-                </Button>
-                <Button
-                  size="small"
-                  onClick={() => {
-                    setIsAddingCard(false)
-                    setNewCardTitle('')
+          {canEdit && (
+            isAddingCard ? (
+              <div className="p-2 bg-white rounded border">
+                <Input.TextArea
+                  value={newCardTitle}
+                  onChange={(e) => setNewCardTitle(e.target.value)}
+                  placeholder="Enter card title..."
+                  autoSize={{ minRows: 2, maxRows: 4 }}
+                  autoFocus
+                  onPressEnter={(e) => {
+                    if (!e.shiftKey) {
+                      e.preventDefault()
+                      handleAddCard()
+                    }
                   }}
-                >
-                  Cancel
-                </Button>
+                />
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    type="primary"
+                    size="small"
+                    onClick={handleAddCard}
+                    loading={createCardMutation.isPending}
+                    disabled={!newCardTitle.trim()}
+                  >
+                    Add
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setIsAddingCard(false)
+                      setNewCardTitle('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <Button
-              type="dashed"
-              icon={<PlusOutlined />}
-              block
-              onClick={() => onAddCard ? onAddCard() : setIsAddingCard(true)}
-            >
-              Add Card
-            </Button>
+            ) : (
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                block
+                onClick={handleAddCardClick}
+              >
+                Add Card
+              </Button>
+            )
           )}
         </div>
       </AntCard>

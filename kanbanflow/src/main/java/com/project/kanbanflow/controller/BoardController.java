@@ -1,20 +1,24 @@
 package com.project.kanbanflow.controller;
 
 import com.project.kanbanflow.dtos.*;
-import com.project.kanbanflow.entity.BoardColumn;
-import com.project.kanbanflow.entity.Card;
+import com.project.kanbanflow.entity.*;
 import com.project.kanbanflow.mapper.BoardMapper;
 import com.project.kanbanflow.mapper.CardMapper;
+import com.project.kanbanflow.repository.ProjectMemberRepository;
 import com.project.kanbanflow.service.BoardService;
+import com.project.kanbanflow.service.ProjectService;
+import com.project.kanbanflow.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -26,6 +30,10 @@ public class BoardController {
     private final BoardService boardService;
     private final BoardMapper boardMapper;
     private final CardMapper cardMapper;
+    private final ProjectService projectService;
+    private final UserService userService;
+    private final ProjectMemberRepository memberRepository;
+
 
     @GetMapping("/projects/{projectId}/columns")
     @Operation(summary = "Get all columns of a project")
@@ -37,6 +45,7 @@ public class BoardController {
     }
 
     @PostMapping("/projects/{projectId}/columns")
+    @PreAuthorize("@projectService.canUserEditProject(#projectId, authentication.principal.id)")
     @Operation(summary = "Create new column")
     public ResponseEntity<BoardColumnDto> createColumn(
             @PathVariable UUID projectId,
@@ -45,7 +54,25 @@ public class BoardController {
         return ResponseEntity.status(HttpStatus.CREATED).body(boardMapper.toDto(column));
     }
 
+    @GetMapping("/projects/{projectId}/my-role")
+    @Operation(summary = "Get current user's role in project")
+    public ResponseEntity<String> getMyProjectRole(@PathVariable UUID projectId) {
+        User currentUser = userService.getCurrentUser();
+        Project project = projectService.getProject(projectId);
+
+        if (project.getOwner().getId().equals(currentUser.getId())) {
+            return ResponseEntity.ok("OWNER");
+        }
+
+        Optional<ProjectMember> member = memberRepository
+                .findByProjectIdAndUserId(projectId, currentUser.getId());
+
+        return member.map(projectMember -> ResponseEntity.ok(projectMember.getRole().name())).orElseGet(() -> ResponseEntity.ok("VIEWER"));
+
+    }
+
     @PutMapping("/columns/{columnId}")
+    @PreAuthorize("@boardService.canUserEditColumn(#columnId, authentication.principal.id)")
     @Operation(summary = "Update column")
     public ResponseEntity<BoardColumnDto> updateColumn(
             @PathVariable UUID columnId,

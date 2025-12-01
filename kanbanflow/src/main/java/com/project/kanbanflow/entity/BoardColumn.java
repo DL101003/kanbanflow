@@ -14,8 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "board_columns",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"project_id", "position"}))
+@Table(name = "board_columns")
 @Getter
 @Setter
 @NoArgsConstructor
