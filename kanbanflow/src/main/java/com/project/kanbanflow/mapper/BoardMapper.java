@@ -5,8 +5,8 @@ import com.project.kanbanflow.entity.BoardColumn;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", uses = {CardMapper.class})
 public interface BoardMapper {
-    @Mapping(target = "cardCount", expression = "java(column.getCards().size())")
+    @Mapping(target = "cardCount", expression = "java(column.getCards() != null ? column.getCards().size() : 0)")
     BoardColumnDto toDto(BoardColumn column);
 }

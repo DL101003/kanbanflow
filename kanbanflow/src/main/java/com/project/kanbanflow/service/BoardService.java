@@ -55,8 +55,8 @@ public class BoardService {
     }
 
     public List<BoardColumn> getProjectColumns(UUID projectId) {
-        projectService.getProject(projectId); // Check access
-        return columnRepository.findByProjectIdOrderByPositionAsc(projectId);
+        projectService.getProject(projectId);
+        return columnRepository.findAllWithCardsByProjectId(projectId);
     }
 
     // COLUMNS
@@ -73,8 +73,6 @@ public class BoardService {
         // Get all active columns
         List<BoardColumn> activeColumns = columnRepository
                 .findByProjectIdOrderByPositionAsc(projectId);
-
-        System.out.println("Active Columns: " + activeColumns.getLast().getPosition());
 
         // Check for duplicate name
         boolean nameExists = activeColumns.stream()

@@ -3,6 +3,7 @@ package com.project.kanbanflow.dtos;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -14,4 +15,5 @@ public class BoardColumnDto {
     private int position;
     private int cardLimit;
     private int cardCount;
+    private List<CardDto> cards;
 }

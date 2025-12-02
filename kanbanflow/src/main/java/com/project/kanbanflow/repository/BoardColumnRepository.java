@@ -19,6 +19,12 @@ public interface BoardColumnRepository extends JpaRepository<BoardColumn, UUID> 
             "WHERE bc.project.id = :projectId")
     Integer findMaxPositionByProjectId(@Param("projectId") UUID projectId);
 
+    @Query("SELECT DISTINCT bc FROM BoardColumn bc " +
+            "LEFT JOIN FETCH bc.cards c " +
+            "WHERE bc.project.id = :projectId " +
+            "ORDER BY bc.position ASC, c.position ASC")
+    List<BoardColumn> findAllWithCardsByProjectId(@Param("projectId") UUID projectId);
+
     @Modifying
     @Query("UPDATE BoardColumn bc SET bc.position = bc.position + 1 " +
             "WHERE bc.project.id = :projectId AND bc.position >= :position")

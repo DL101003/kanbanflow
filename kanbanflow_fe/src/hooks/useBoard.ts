@@ -13,13 +13,7 @@ export function useBoard(projectId: string | undefined) {
     queryKey: ['board', projectId],
     queryFn: async () => {
       if (!projectId) return []
-      const cols = await boardsApi.getColumns(projectId)
-      const columnsWithCards = await Promise.all(
-        cols.map(async (col: BoardColumn) => {
-          const cards = await boardsApi.getCards(col.id)
-          return { ...col, cards }
-        })
-      )
+      const columnsWithCards = await boardsApi.getColumns(projectId)
       setColumns(columnsWithCards)
       return columnsWithCards
     },
@@ -88,7 +82,6 @@ export function useBoard(projectId: string | undefined) {
         dueDate?: string
       }
     }) => {
-      console.log('createCardMutation called with:', params)
       return boardsApi.createCard(params.columnId, params.data)
     },
     onSuccess: () => {
@@ -148,7 +141,6 @@ export function useBoard(projectId: string | undefined) {
       dueDate?: string
     }
   }) => {
-    console.log('useBoard.createCard wrapper called with:', params)
     createCardMutation.mutate(params)
   }
 
