@@ -6,6 +6,7 @@ import com.project.kanbanflow.mapper.BoardMapper;
 import com.project.kanbanflow.mapper.CardMapper;
 import com.project.kanbanflow.repository.ProjectMemberRepository;
 import com.project.kanbanflow.service.BoardService;
+import com.project.kanbanflow.service.CardService;
 import com.project.kanbanflow.service.ProjectService;
 import com.project.kanbanflow.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,6 +34,7 @@ public class BoardController {
     private final ProjectService projectService;
     private final UserService userService;
     private final ProjectMemberRepository memberRepository;
+    private final CardService cardService;
 
 
     @GetMapping("/projects/{projectId}/columns")
@@ -100,7 +102,7 @@ public class BoardController {
     @GetMapping("/columns/{columnId}/cards")
     @Operation(summary = "Get all cards in a column")
     public ResponseEntity<List<CardDto>> getColumnCards(@PathVariable UUID columnId) {
-        List<Card> cards = boardService.getColumnCards(columnId);
+        List<Card> cards = cardService.getColumnCards(columnId);
         return ResponseEntity.ok(cards.stream()
                 .map(cardMapper::toDto)
                 .toList());
@@ -111,14 +113,14 @@ public class BoardController {
     public ResponseEntity<CardDto> createCard(
             @PathVariable UUID columnId,
             @Valid @RequestBody CreateCardRequest request) {
-        Card card = boardService.createCard(columnId, request);
+        Card card = cardService.createCard(columnId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(cardMapper.toDto(card));
     }
 
     @GetMapping("/cards/{cardId}")
     @Operation(summary = "Get card details")
     public ResponseEntity<CardDetailDto> getCard(@PathVariable UUID cardId) {
-        Card card = boardService.getCard(cardId);
+        Card card = cardService.getCard(cardId);
         return ResponseEntity.ok(cardMapper.toDetailDto(card));
     }
 
@@ -127,7 +129,7 @@ public class BoardController {
     public ResponseEntity<CardDto> updateCard(
             @PathVariable UUID cardId,
             @Valid @RequestBody UpdateCardRequest request) {
-        Card card = boardService.updateCard(cardId, request);
+        Card card = cardService.updateCard(cardId, request);
         return ResponseEntity.ok(cardMapper.toDto(card));
     }
 
@@ -135,7 +137,7 @@ public class BoardController {
     @Operation(summary = "Delete card")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteCard(@PathVariable UUID cardId) {
-        boardService.deleteCard(cardId);
+        cardService.deleteCard(cardId);
     }
 
     @PutMapping("/cards/{cardId}/move")
@@ -143,7 +145,7 @@ public class BoardController {
     public ResponseEntity<CardDto> moveCard(
             @PathVariable UUID cardId,
             @Valid @RequestBody MoveCardRequest request) {
-        Card card = boardService.moveCard(cardId, request.getColumnId(), request.getPosition());
+        Card card = cardService.moveCard(cardId, request.getColumnId(), request.getPosition());
         return ResponseEntity.ok(cardMapper.toDto(card));
     }
 
@@ -152,7 +154,7 @@ public class BoardController {
     public ResponseEntity<CardDto> assignCard(
             @PathVariable UUID cardId,
             @RequestBody AssignCardRequest request) {
-        Card card = boardService.assignCard(cardId, request.getUserId());
+        Card card = cardService.assignCard(cardId, request.getUserId());
         return ResponseEntity.ok(cardMapper.toDto(card));
     }
 }

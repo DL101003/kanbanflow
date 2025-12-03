@@ -211,7 +211,8 @@ public class ProjectService {
         List<ProjectMember> members = memberRepository.findByProjectId(projectId);
 
         // Add owner to list
-        Project project = projectRepository.findById(projectId).get();
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new NotFoundException("Project not found with id: " + projectId));
         List<ProjectMemberDto> result = new ArrayList<>();
 
         // Owner first

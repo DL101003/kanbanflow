@@ -11,12 +11,12 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class JwtService {
+public class SecurityUtils {
 
     private final JwtEncoder encoder;
     private final JwtDecoder decoder;
 
-    @Value("${jwt.expiration:86400}") // 24 hours default
+    @Value("${jwt.expiration:86400}")
     private long expiration;
 
     public String generateToken(String username, UUID userId) {

@@ -30,6 +30,12 @@ import type { Project } from '@/types'
 const { Title, Paragraph } = Typography
 const { TextArea } = Input
 
+interface CreateProjectFormValues {
+  name: string;
+  description?: string;
+  color?: string | { toHexString: () => string };
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -82,7 +88,7 @@ export default function Dashboard() {
     },
   })
 
-  const handleCreateProject = (values: any) => {
+  const handleCreateProject = (values: CreateProjectFormValues) => {
     let colorValue = '#3B82F6'
 
     if (values.color) {
