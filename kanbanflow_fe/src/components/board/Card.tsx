@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Card as AntCard, Tag, Button } from 'antd'
+import { Card as AntCard, Tag, Button, Tooltip, Avatar } from 'antd'
 import { CalendarOutlined, CommentOutlined, EyeOutlined } from '@ant-design/icons'
 import { format } from 'date-fns'
 import { useBoardStore } from '@/store/boardStore'
@@ -14,16 +14,17 @@ interface CardProps {
   isDragging?: boolean
 }
 
-const priorityColors = {
-  LOW: 'green',
-  MEDIUM: 'blue',
-  HIGH: 'orange',
-  URGENT: 'red',
-}
-
 export default function Card({ card, canEdit = false, isDragging }: CardProps) {
   const setSelectedCard = useBoardStore((state) => state.setSelectedCard)
   const [isDraggingLocal, setIsDraggingLocal] = useState(false)
+
+  // Logic màu priority tinh tế hơn
+  const priorityColorClass = {
+    LOW: 'bg-green-500',
+    MEDIUM: 'bg-blue-500',
+    HIGH: 'bg-orange-500',
+    URGENT: 'bg-red-500',
+  }
   
   const {
     attributes,
@@ -52,76 +53,69 @@ export default function Card({ card, canEdit = false, isDragging }: CardProps) {
 
   return (
     <div ref={setNodeRef} style={style}>
-      <AntCard
-        size="small"
+        {/* ✅ UX IMPROVEMENT: 
+            - group: để control hiệu ứng hover cho các phần tử con
+            - hover:ring-2: tạo viền focus khi hover thay vì shadow đơn điệu
+            - select-none: chặn bôi đen text khi đang kéo thả
+        */}
+      <div
         className={cn(
-          'hover:shadow-md transition-shadow',
-          card.completed && 'opacity-60'
+          'group relative bg-white p-3 rounded-lg shadow-sm border border-gray-200',
+          'hover:shadow-md transition-all duration-200',
+          'cursor-pointer select-none',
+          isDragging && 'shadow-xl rotate-2 scale-105 z-50 opacity-90', // Hiệu ứng khi đang kéo
+          card.completed && 'opacity-60 bg-gray-50'
         )}
-        bodyStyle={{ padding: '12px' }}
+        onClick={handleViewClick}
+        {...(canEdit ? attributes : {})}
+        {...(canEdit ? listeners : {})}
       >
-        {/* Draggable area - only enabled if user can edit */}
-        <div
-          {...(canEdit ? attributes : {})}
-          {...(canEdit ? listeners : {})}
-          onMouseDown={() => canEdit && setIsDraggingLocal(true)}
-          onMouseUp={() => canEdit && setIsDraggingLocal(false)}
-          className={canEdit ? "cursor-move" : ""}
-        >
-          {card.coverColor && (
-            <div
-              className="h-8 -m-3 mb-2 rounded-t"
-              style={{ backgroundColor: card.coverColor }}
-            />
-          )}
+        {/* Priority Stripe: Dải màu nhỏ bên trái thay vì Tag to */}
+        <div className={cn(
+            "absolute left-0 top-3 bottom-3 w-1 rounded-r", 
+            priorityColorClass[card.priority] || 'bg-gray-300'
+        )} />
 
-          <div className="space-y-2">
-            <div className="font-medium line-clamp-2">{card.title}</div>
-            
-            {card.description && (
-              <div className="text-sm text-gray-500 line-clamp-2">
-                {card.description}
-              </div>
-            )}
-            
-            <div className="flex items-center gap-2 flex-wrap">
-              <Tag color={priorityColors[card.priority]} className="m-0">
-                {card.priority}
-              </Tag>
-              
-              {card.dueDate && (
-                <span className={cn(
-                  'text-xs flex items-center gap-1',
-                  card.overdue ? 'text-red-500' : 'text-gray-500'
-                )}>
-                  <CalendarOutlined />
-                  {format(new Date(card.dueDate), 'MMM dd')}
-                </span>
-              )}
-              
-              {card.commentCount > 0 && (
-                <span className="text-xs text-gray-500 flex items-center gap-1">
-                  <CommentOutlined />
-                  {card.commentCount}
-                </span>
-              )}
+        <div className="pl-3"> 
+            {/* Title */}
+            <h4 className="text-sm font-medium text-gray-800 mb-1 leading-tight group-hover:text-blue-600">
+                {card.title}
+            </h4>
+
+            {/* Meta info row */}
+            <div className="flex items-center justify-between mt-3">
+                <div className="flex gap-2 text-xs text-gray-500">
+                    {card.dueDate && (
+                         <span className={cn(
+                            'flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded',
+                            card.overdue && 'text-red-600 bg-red-50 font-medium'
+                          )}>
+                           <CalendarOutlined />
+                           {format(new Date(card.dueDate), 'MMM dd')}
+                         </span>
+                    )}
+                    {card.commentCount > 0 && (
+                        <span className="flex items-center gap-1 hover:text-gray-700">
+                            <CommentOutlined /> {card.commentCount}
+                        </span>
+                    )}
+                </div>
+
+                {/* Avatar Assignee: Cực kỳ quan trọng cho UX Kanban */}
+                {card.assignee && (
+                    <Tooltip title={card.assignee.fullName}>
+                        <Avatar 
+                            size={24} 
+                            src={card.assignee.avatarUrl} 
+                            className="text-xs border border-white"
+                        >
+                            {card.assignee.fullName[0]}
+                        </Avatar>
+                    </Tooltip>
+                )}
             </div>
-          </div>
         </div>
-        
-        {/* View Details Button - always visible regardless of permissions */}
-        <div className="mt-2 pt-2 border-t">
-          <Button 
-            type="link" 
-            size="small" 
-            icon={<EyeOutlined />}
-            onClick={handleViewClick}
-            className="p-0"
-          >
-            View Details
-          </Button>
-        </div>
-      </AntCard>
+      </div>
     </div>
   )
 }

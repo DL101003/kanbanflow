@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { Modal, Form, Input, InputNumber, ColorPicker, message } from 'antd'
 import type { BoardColumn } from '@/types'
 
@@ -11,16 +10,6 @@ interface EditColumnModalProps {
 
 export default function EditColumnModal({ column, open, onClose, onSave }: EditColumnModalProps) {
   const [form] = Form.useForm()
-
-  useEffect(() => {
-    if (column) {
-      form.setFieldsValue({
-        name: column.name,
-        color: column.color,
-        cardLimit: column.cardLimit,
-      })
-    }
-  }, [column, form])
 
   const handleSubmit = async () => {
     try {
@@ -46,7 +35,16 @@ export default function EditColumnModal({ column, open, onClose, onSave }: EditC
       onCancel={onClose}
       destroyOnHidden
     >
-      <Form form={form} layout="vertical">
+      <Form 
+        key={column?.id || 'new'} 
+        form={form} 
+        layout="vertical"
+        initialValues={{
+            name: column?.name,
+            color: column?.color,
+            cardLimit: column?.cardLimit
+        }}
+      >
         <Form.Item
           name="name"
           label="Column Name"
@@ -62,9 +60,8 @@ export default function EditColumnModal({ column, open, onClose, onSave }: EditC
         <Form.Item
           name="cardLimit"
           label="Card Limit (WIP Limit)"
-          tooltip="Maximum number of cards allowed in this column"
         >
-          <InputNumber min={1} max={50} placeholder="No limit" className="w-full" />
+          <InputNumber min={1} max={50} className="w-full" />
         </Form.Item>
       </Form>
     </Modal>

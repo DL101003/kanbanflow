@@ -127,7 +127,65 @@ export function useBoard(projectId: string | undefined) {
       columnId: string
       position: number
     }) => boardsApi.moveCard(cardId, columnId, position),
-    onSuccess: () => {
+
+    onMutate: async (newMove) => {
+      // 1. Hủy các query đang chạy để tránh conflict dữ liệu cũ đè lên mới
+      await queryClient.cancelQueries({ queryKey: ['board', projectId] })
+
+      // 2. Snapshot (lưu lại) dữ liệu hiện tại để rollback nếu lỗi
+      const previousBoard = queryClient.getQueryData<BoardColumn[]>(['board', projectId])
+
+      // 3. Cập nhật cache React Query một cách thủ công (Optimistic Update)
+      queryClient.setQueryData<BoardColumn[]>(['board', projectId], (oldColumns) => {
+        if (!oldColumns) return []
+
+        // Clone mảng để đảm bảo tính bất biến (immutability)
+        const newColumns = JSON.parse(JSON.stringify(oldColumns)) as BoardColumn[]
+
+        // Tìm cột nguồn và cột đích
+        let sourceColumn: BoardColumn | undefined
+        let cardToMove: any
+
+        // Bước 3.1: Tìm và xóa card khỏi cột cũ
+        for (const col of newColumns) {
+          const cardIndex = col.cards?.findIndex(c => c.id === newMove.cardId)
+          if (cardIndex !== undefined && cardIndex !== -1) {
+            sourceColumn = col
+            // Cắt card ra khỏi mảng cards
+            cardToMove = col.cards?.splice(cardIndex, 1)[0]
+            break
+          }
+        }
+
+        // Bước 3.2: Thêm card vào cột mới
+        const targetColumn = newColumns.find(col => col.id === newMove.columnId)
+        
+        if (targetColumn && cardToMove) {
+          // Cập nhật columnId mới cho card (để UI hiển thị đúng nếu cần)
+          cardToMove.columnId = targetColumn.id // Lưu ý: check lại type Card của bạn
+          
+          if (!targetColumn.cards) targetColumn.cards = []
+          // Chèn card vào vị trí mới (index = position)
+          targetColumn.cards.splice(newMove.position, 0, cardToMove)
+        }
+
+        return newColumns
+      })
+
+      // Trả về context chứa snapshot cũ để dùng cho onError
+      return { previousBoard }
+    },
+
+    // ✅ Nếu API lỗi, trả lại dữ liệu cũ ngay lập tức
+    onError: (err, newMove, context) => {
+      if (context?.previousBoard) {
+        queryClient.setQueryData(['board', projectId], context.previousBoard)
+      }
+      message.error('Failed to move card')
+    },
+
+    // ✅ Dù thành công hay thất bại, fetch lại dữ liệu mới nhất từ server để đảm bảo tính đồng bộ
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['board', projectId] })
     },
   })
