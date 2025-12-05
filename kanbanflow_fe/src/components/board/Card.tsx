@@ -1,11 +1,13 @@
-import { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Card as AntCard, Tag, Button, Tooltip, Avatar } from 'antd'
-import { CalendarOutlined, CommentOutlined, EyeOutlined } from '@ant-design/icons'
+import { Card as ShadcnCard, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Calendar, MessageSquare } from 'lucide-react'
 import { format } from 'date-fns'
 import { useBoardStore } from '@/store/boardStore'
-import { cn } from '@/utils/cn'
+import { cn } from '@/lib/utils'
+import { getInitials } from '@/lib/helpers'
 import type { Card as CardType } from '@/types'
 
 interface CardProps {
@@ -14,18 +16,24 @@ interface CardProps {
   isDragging?: boolean
 }
 
+// Map priority sang màu của Shadcn Badge (hoặc class Tailwind)
+const priorityStyles = {
+  LOW: 'border-l-emerald-500',
+  MEDIUM: 'border-l-blue-500',
+  HIGH: 'border-l-orange-500',
+  URGENT: 'border-l-red-500',
+}
+
+const badgeVariants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  LOW: 'secondary',
+  MEDIUM: 'default', // Xanh (primary)
+  HIGH: 'outline',   // Có thể custom thêm class text-orange
+  URGENT: 'destructive',
+}
+
 export default function Card({ card, canEdit = false, isDragging }: CardProps) {
   const setSelectedCard = useBoardStore((state) => state.setSelectedCard)
-  const [isDraggingLocal, setIsDraggingLocal] = useState(false)
 
-  // Logic màu priority tinh tế hơn
-  const priorityColorClass = {
-    LOW: 'bg-green-500',
-    MEDIUM: 'bg-blue-500',
-    HIGH: 'bg-orange-500',
-    URGENT: 'bg-red-500',
-  }
-  
   const {
     attributes,
     listeners,
@@ -33,89 +41,69 @@ export default function Card({ card, canEdit = false, isDragging }: CardProps) {
     transform,
     transition,
     isDragging: isSortableDragging,
-  } = useSortable({ 
+  } = useSortable({
     id: card.id,
-    disabled: !canEdit, // Disable drag if user can't edit
+    disabled: !canEdit,
   })
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging || isSortableDragging || isDraggingLocal ? 0.5 : 1,
-  }
-
-  const handleViewClick = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    console.log('Opening card details:', card.title)
-    setSelectedCard(card)
+    opacity: isDragging || isSortableDragging ? 0.5 : 1,
   }
 
   return (
-    <div ref={setNodeRef} style={style}>
-        {/* ✅ UX IMPROVEMENT: 
-            - group: để control hiệu ứng hover cho các phần tử con
-            - hover:ring-2: tạo viền focus khi hover thay vì shadow đơn điệu
-            - select-none: chặn bôi đen text khi đang kéo thả
-        */}
-      <div
+    <div ref={setNodeRef} style={style} className="mb-3">
+      <ShadcnCard
         className={cn(
-          'group relative bg-white p-3 rounded-lg shadow-sm border border-gray-200',
-          'hover:shadow-md transition-all duration-200',
-          'cursor-pointer select-none',
-          isDragging && 'shadow-xl rotate-2 scale-105 z-50 opacity-90', // Hiệu ứng khi đang kéo
-          card.completed && 'opacity-60 bg-gray-50'
+          "cursor-grab active:cursor-grabbing transition-all hover:shadow-md border-l-4",
+          priorityStyles[card.priority] || 'border-l-gray-300', // Giữ cái vạch màu bên trái đặc trưng của Kanban
+          isDragging && "rotate-2 scale-105 shadow-xl z-50 ring-2 ring-primary opacity-90",
+          card.completed && "opacity-60 bg-muted"
         )}
-        onClick={handleViewClick}
+        onClick={() => setSelectedCard(card)}
         {...(canEdit ? attributes : {})}
         {...(canEdit ? listeners : {})}
       >
-        {/* Priority Stripe: Dải màu nhỏ bên trái thay vì Tag to */}
-        <div className={cn(
-            "absolute left-0 top-3 bottom-3 w-1 rounded-r", 
-            priorityColorClass[card.priority] || 'bg-gray-300'
-        )} />
-
-        <div className="pl-3"> 
-            {/* Title */}
-            <h4 className="text-sm font-medium text-gray-800 mb-1 leading-tight group-hover:text-blue-600">
+        <CardContent className="p-3 space-y-2.5">
+          {/* Labels / Tags row (Optional) */}
+          <div className="flex justify-between items-start gap-2">
+            <span className="text-sm font-medium leading-snug line-clamp-2 text-card-foreground">
                 {card.title}
-            </h4>
+            </span>
+          </div>
 
-            {/* Meta info row */}
-            <div className="flex items-center justify-between mt-3">
-                <div className="flex gap-2 text-xs text-gray-500">
-                    {card.dueDate && (
-                         <span className={cn(
-                            'flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded',
-                            card.overdue && 'text-red-600 bg-red-50 font-medium'
-                          )}>
-                           <CalendarOutlined />
-                           {format(new Date(card.dueDate), 'MMM dd')}
-                         </span>
-                    )}
-                    {card.commentCount > 0 && (
-                        <span className="flex items-center gap-1 hover:text-gray-700">
-                            <CommentOutlined /> {card.commentCount}
-                        </span>
-                    )}
+          {/* Footer Info */}
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center gap-3 text-muted-foreground text-xs">
+              {card.dueDate && (
+                <div className={cn(
+                    "flex items-center gap-1",
+                    card.overdue && "text-destructive font-medium"
+                )}>
+                  <Calendar className="h-3 w-3" />
+                  <span>{format(new Date(card.dueDate), 'MMM dd')}</span>
                 </div>
-
-                {/* Avatar Assignee: Cực kỳ quan trọng cho UX Kanban */}
-                {card.assignee && (
-                    <Tooltip title={card.assignee.fullName}>
-                        <Avatar 
-                            size={24} 
-                            src={card.assignee.avatarUrl} 
-                            className="text-xs border border-white"
-                        >
-                            {card.assignee.fullName[0]}
-                        </Avatar>
-                    </Tooltip>
-                )}
+              )}
+              {card.commentCount > 0 && (
+                <div className="flex items-center gap-1">
+                  <MessageSquare className="h-3 w-3" />
+                  <span>{card.commentCount}</span>
+                </div>
+              )}
             </div>
-        </div>
-      </div>
+
+            {card.assignee && (
+              <Avatar className="h-6 w-6 border-2 border-background">
+                <AvatarImage src={card.assignee.avatarUrl} />
+                <AvatarFallback className="text-[10px]">
+                    {getInitials(card.assignee.fullName)}
+                </AvatarFallback>
+              </Avatar>
+            )}
+          </div>
+        </CardContent>
+      </ShadcnCard>
     </div>
   )
 }

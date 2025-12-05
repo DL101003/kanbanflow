@@ -1,31 +1,25 @@
-import { Spin } from 'antd'
+import { Loader2 } from "lucide-react"
 
 interface LoadingProps {
-  size?: 'small' | 'default' | 'large'
+  size?: number
   fullScreen?: boolean
   tip?: string
 }
 
-export default function Loading({ size = 'default', fullScreen = false, tip }: LoadingProps) {
-  
-  // 1. SỬA TRƯỜNG HỢP FULLSCREEN
+export default function Loading({ fullScreen = false, tip }: LoadingProps) {
   if (fullScreen) {
-    // Dùng prop 'fullscreen' có sẵn của <Spin>
-    // Nó sẽ tự động căn giữa, tạo lớp phủ và hiển thị tip bên dưới
-    return <Spin size={size} tip={tip} fullscreen />;
+    return (
+      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        {tip && <p className="mt-4 text-lg font-medium text-muted-foreground animate-pulse">{tip}</p>}
+      </div>
+    )
   }
 
-  // 2. SỬA TRƯỜNG HỢP CƠ BẢN (KHÔNG FULLSCREEN)
   return (
-    // Dùng flex-col để 'tip' nằm bên dưới 'Spin'
-    <div className="flex flex-col items-center justify-center py-12">
-      
-      {/* Không truyền 'tip' vào <Spin> nữa */}
-      <Spin size={size} /> 
-      
-      {/* Tự render 'tip' ở bên ngoài nếu nó tồn tại */}
-      {tip && <div className="mt-2 text-gray-500">{tip}</div>}
-      
+    <div className="flex flex-col items-center justify-center py-8">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      {tip && <p className="mt-2 text-sm text-muted-foreground">{tip}</p>}
     </div>
-  );
+  )
 }

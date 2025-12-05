@@ -1,6 +1,13 @@
-import { Button, Dropdown, message } from 'antd'
-import { DownloadOutlined, FileTextOutlined, FileExcelOutlined } from '@ant-design/icons'
+import { Download, FileText, FileSpreadsheet } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { projectsApi } from '@/api/projects.api'
+import { toast } from "sonner"
 
 interface ExportButtonProps {
   projectId: string
@@ -11,7 +18,6 @@ export default function ExportButton({ projectId }: ExportButtonProps) {
     try {
       const data = await projectsApi.exportProject(projectId, format)
       
-      // Create download link
       const blob = new Blob([format === 'csv' ? data : JSON.stringify(data, null, 2)], {
         type: format === 'csv' ? 'text/csv' : 'application/json',
       })
@@ -22,32 +28,27 @@ export default function ExportButton({ projectId }: ExportButtonProps) {
       a.click()
       window.URL.revokeObjectURL(url)
       
-      message.success(`Project exported as ${format.toUpperCase()}`)
+      toast.success(`Project exported as ${format.toUpperCase()}`)
     } catch (error) {
-      message.error('Export failed')
+      toast.error('Export failed')
     }
   }
 
-  const menu = {
-    items: [
-      {
-        key: 'csv',
-        icon: <FileExcelOutlined />,
-        label: 'Export as CSV',
-        onClick: () => handleExport('csv'),
-      },
-      {
-        key: 'json',
-        icon: <FileTextOutlined />,
-        label: 'Export as JSON',
-        onClick: () => handleExport('json'),
-      },
-    ],
-  }
-
   return (
-    <Dropdown menu={menu}>
-      <Button icon={<DownloadOutlined />}>Export</Button>
-    </Dropdown>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Download className="mr-2 h-4 w-4" /> Export
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => handleExport('csv')}>
+          <FileSpreadsheet className="mr-2 h-4 w-4" /> Export as CSV
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleExport('json')}>
+          <FileText className="mr-2 h-4 w-4" /> Export as JSON
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
-}
+} 

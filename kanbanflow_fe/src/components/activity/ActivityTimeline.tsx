@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { Timeline, Avatar, Typography, Empty, Spin } from 'antd'
-import { UserOutlined, FileAddOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { formatDistanceToNow } from 'date-fns'
-import { apiClient } from '@/api/client' // Use apiClient instead of fetch
-
-const { Text } = Typography
+import { Loader2 } from 'lucide-react'
+import { apiClient } from '@/api/client'
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { getInitials } from '@/lib/helpers'
 
 interface Activity {
   id: string
@@ -40,33 +39,36 @@ export default function ActivityTimeline({ projectId, cardId }: ActivityTimeline
     enabled: !!projectId || !!cardId,
   })
 
-  if (isLoading) return <Spin />
+  if (isLoading) return <div className="flex justify-center p-4"><Loader2 className="animate-spin h-5 w-5 text-muted-foreground" /></div>
+  
   if (!activities || activities.length === 0) {
-    return <Empty description="No activities yet" />
+    return <div className="text-center text-sm text-muted-foreground py-8">No activities recorded yet.</div>
   }
 
   return (
-    <Timeline>
+    <div className="relative pl-6 border-l border-muted space-y-6 my-4">
       {activities.map((activity: Activity) => (
-        <Timeline.Item
-          key={activity.id}
-          dot={
-            <Avatar size="small" src={activity.user.avatarUrl} icon={<UserOutlined />}>
-              {activity.user.fullName?.[0]}
-            </Avatar>
-          }
-        >
-          <div>
-            <Text strong>{activity.user.fullName}</Text>
-            <Text> {activity.details}</Text>
+        <div key={activity.id} className="relative group">
+          {/* Dot on timeline */}
+          <div className="absolute -left-[29px] top-1 h-3 w-3 rounded-full border border-background bg-muted-foreground/30 ring-4 ring-background group-hover:bg-primary transition-colors" />
+          
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-sm">
+                <Avatar className="h-5 w-5">
+                    <AvatarImage src={activity.user.avatarUrl} />
+                    <AvatarFallback className="text-[9px]">{getInitials(activity.user.fullName)}</AvatarFallback>
+                </Avatar>
+                <span className="font-semibold">{activity.user.fullName}</span>
+                <span className="text-muted-foreground text-xs">
+                    {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
+                </span>
+            </div>
+            <p className="text-sm text-foreground/80 pl-7">
+               {activity.details}
+            </p>
           </div>
-          <div>
-            <Text type="secondary" className="text-xs">
-              {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
-            </Text>
-          </div>
-        </Timeline.Item>
+        </div>
       ))}
-    </Timeline>
+    </div>
   )
 }

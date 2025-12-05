@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Form, message } from 'antd'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import type { DragEndEvent } from '@dnd-kit/core'
+import { toast } from "sonner"
 import { projectsApi } from '@/api/projects.api'
 import { useBoard } from '@/hooks/useBoard'
 import { useBoardStore } from '@/store/boardStore'
+import { useKanbanDrag } from './useKanbanDrag'
 import type { BoardColumn, Card as CardType } from '@/types'
 
 export function useBoardLogic(projectId: string | undefined) {
@@ -14,35 +14,37 @@ export function useBoardLogic(projectId: string | undefined) {
   // 1. Local States
   const [activeCard, setActiveCard] = useState<CardType | null>(null)
   const [showStats, setShowStats] = useState(false)
-  const [isColumnModalOpen, setIsColumnModalOpen] = useState(false)
+  
+  // Modal States
+  const [isCreateColumnOpen, setIsCreateColumnOpen] = useState(false)
   const [editingColumn, setEditingColumn] = useState<BoardColumn | null>(null)
-  const [userRole, setUserRole] = useState<string>('VIEWER')
-  const [loadingRole, setLoadingRole] = useState(true)
   const [createCardModal, setCreateCardModal] = useState<{
     open: boolean
     columnId: string | null
   }>({ open: false, columnId: null })
+
+  // User Role State
+  const [userRole, setUserRole] = useState<string>('VIEWER')
+  const [loadingRole, setLoadingRole] = useState(true)
+
+  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('')
   const [filters, setFilters] = useState<{ priority?: string; completed?: boolean }>({})
 
-  // 2. Forms
-  const [columnForm] = Form.useForm()
-  const [editColumnForm] = Form.useForm()
-
-  // 3. Store Actions
+  // 2. Store Actions
   const { selectedCard, setSelectedCard } = useBoardStore()
 
-  // 4. Queries & Custom Hooks
+  // 3. Queries & Custom Hooks
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => projectsApi.getProject(projectId!),
     enabled: !!projectId,
   })
 
-  // Lấy logic CRUD từ useBoard cũ
+  // Lấy logic CRUD từ useBoard (đã refactor ở bước trước)
   const boardOperations = useBoard(projectId)
 
-  // 5. Permission Logic
+  // 4. Permission Logic
   useEffect(() => {
     if (projectId) {
       setLoadingRole(true)
@@ -60,87 +62,57 @@ export function useBoardLogic(projectId: string | undefined) {
     roleLabel: userRole
   }
 
+  // 5. Drag & Drop Hook
+  const { 
+    sensors, 
+    activeId, 
+    activeData,
+    handleDragStart, 
+    handleDragOver, 
+    handleDragEnd 
+  } = useKanbanDrag({
+    columns: boardOperations.columns,
+    setColumns: boardOperations.setColumns, // Make sure useBoard exports this or expose from store
+    onMoveCard: boardOperations.moveCard,
+    onMoveColumn: boardOperations.moveColumn
+  })
+
   // 6. Handlers
-  const handleCreateColumn = (values: any) => {
-    boardOperations.createColumn({
-      name: values.name,
-      color: values.color || '#3B82F6',
-    })
-    setIsColumnModalOpen(false)
-    columnForm.resetFields()
+  const handleCreateColumn = (values: { name: string; color?: string; cardLimit?: number }) => {
+    boardOperations.createColumn(values)
+    setIsCreateColumnOpen(false)
   }
 
-  const handleUpdateColumn = (values: any) => {
-    if (editingColumn) {
-      boardOperations.updateColumn({
-        id: editingColumn.id,
-        data: values,
+  const handleUpdateColumn = (id: string, values: Partial<BoardColumn>) => {
+    boardOperations.updateColumn({ id, data: values })
+    setEditingColumn(null)
+  }
+
+  // Filter Logic
+  const filteredColumns = useMemo(() => {
+    return boardOperations.columns.map(col => ({
+      ...col,
+      cards: col.cards?.filter(card => {
+        const matchQuery = !searchQuery || 
+          card.title.toLowerCase().includes(searchQuery.toLowerCase())
+        
+        const matchPriority = !filters.priority || card.priority === filters.priority
+        
+        const matchStatus = filters.completed === undefined || card.completed === filters.completed
+
+        return matchQuery && matchPriority && matchStatus
       })
-      setEditingColumn(null)
-      editColumnForm.resetFields()
-    }
-  }
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over) return
-
-    const activeId = active.id as string
-    const overId = over.id as string
-
-    // Tìm cột nguồn và cột đích dựa trên ID
-    let targetColumn = boardOperations.columns.find((col) => col.id === overId)
-    
-    // Nếu over vào một card, tìm cột chứa card đó
-    if (!targetColumn) {
-      targetColumn = boardOperations.columns.find((col) => 
-        col.cards?.some((c) => c.id === overId)
-      )
-    }
-
-    if (!targetColumn) return
-
-    // Tính toán position mới
-    let position = 0
-    if (targetColumn.cards && targetColumn.cards.length > 0) {
-      const overCardIndex = targetColumn.cards.findIndex((c) => c.id === overId)
-      // Nếu drop lên card, lấy index đó. Nếu drop vào cột trống hoặc cuối, lấy length
-      position = overCardIndex >= 0 ? overCardIndex : targetColumn.cards.length
-    }
-
-    boardOperations.moveCard({
-      cardId: activeId,
-      columnId: targetColumn.id,
-      position,
-    })
-
-    setActiveCard(null)
-  }
-
-  const filteredColumns = boardOperations.columns.map(col => ({
-    ...col,
-    cards: col.cards?.filter(card => {
-      const matchQuery = !searchQuery || 
-        card.title.toLowerCase().includes(searchQuery.toLowerCase())
-      
-      const matchPriority = !filters.priority || card.priority === filters.priority
-      
-      const matchStatus = filters.completed === undefined || card.completed === filters.completed
-
-      return matchQuery && matchPriority && matchStatus
-    })
-  }))
+    }))
+  }, [boardOperations.columns, searchQuery, filters])
 
   const handleSearch = useCallback((query: string, newFilters: any) => {
-    // Chỉ update nếu giá trị thực sự thay đổi để tránh render thừa
-    setSearchQuery(prev => prev === query ? prev : query)
-    setFilters(prev => JSON.stringify(prev) === JSON.stringify(newFilters) ? prev : newFilters)
+    setSearchQuery(query)
+    setFilters(newFilters)
   }, [])
 
   const handleExport = async (format: 'csv' | 'json') => {
     try {
       const data = await projectsApi.exportProject(projectId!, format)
-      // ... logic download blob giữ nguyên ...
       const blob = new Blob(
         [format === 'csv' ? data : JSON.stringify(data, null, 2)],
         { type: format === 'csv' ? 'text/csv' : 'application/json' }
@@ -151,13 +123,14 @@ export function useBoardLogic(projectId: string | undefined) {
       a.download = `${project?.name || 'project'}-export.${format}`
       a.click()
       window.URL.revokeObjectURL(url)
-      message.success(`Exported as ${format.toUpperCase()}`)
+      toast.success(`Exported as ${format.toUpperCase()}`)
     } catch (error) {
-      message.error('Export failed')
+      toast.error('Export failed')
     }
   }
 
-  const stats = (() => {
+  // Stats Calculation
+  const stats = useMemo(() => {
     let totalCards = 0
     let completedCards = 0
     let overdueCards = 0
@@ -168,30 +141,12 @@ export function useBoardLogic(projectId: string | undefined) {
       overdueCards += cards.filter((c) => c.overdue).length
     })
     return { totalCards, completedCards, overdueCards, totalColumns: boardOperations.columns.length }
-  })()
+  }, [boardOperations.columns])
 
-  const handlers = useMemo(() => ({
-    handleCreateColumn,
-    handleUpdateColumn,
-    handleDragEnd,
-    handleExport,
-    handleSearch, // Hàm đã được useCallback
-    navigateToTeam: () => navigate(`/projects/${projectId}/team`),
-    openEditColumnModal: (col: BoardColumn) => {
-      setEditingColumn(col)
-      editColumnForm.setFieldsValue({
-        name: col.name,
-        color: col.color,
-        cardLimit: col.cardLimit
-      })
-    }
-  }), [projectId, project, boardOperations.columns])
-
-  // 7. Return everything UI needs
   return {
     // Data
     project,
-    columns: filteredColumns,
+    columns: filteredColumns, // Return filtered columns for rendering
     isLoading: boardOperations.isLoading || loadingRole,
     permissions,
     stats,
@@ -201,27 +156,39 @@ export function useBoardLogic(projectId: string | undefined) {
     setActiveCard,
     showStats, 
     setShowStats,
-    isColumnModalOpen, 
-    setIsColumnModalOpen,
+    
+    // Modal Control States
+    isCreateColumnOpen, 
+    setIsCreateColumnOpen,
     editingColumn, 
-    setEditingColumn, // Cần expose cái này để mở modal edit
+    setEditingColumn,
     createCardModal, 
     setCreateCardModal,
     selectedCard, 
     setSelectedCard,
 
-    // Forms
-    columnForm,
-    editColumnForm,
-
-    // Methods from useBoard (renamed for clarity)
+    // Methods
     deleteColumn: boardOperations.deleteColumn,
     createCard: boardOperations.createCard,
     updateCard: boardOperations.updateCard,
     deleteCard: boardOperations.deleteCard,
     
-    
-    // UI Handlers
-    handlers
+    // Handlers Wrapper
+    handlers: {
+      handleCreateColumn,
+      handleUpdateColumn,
+      handleDragEnd,
+      handleExport,
+      handleSearch,
+      navigateToTeam: () => navigate(`/projects/${projectId}/team`),
+    },
+
+    // DnD Props
+    dragSensors: sensors,
+    activeDragId: activeId,
+    activeDragData: activeData,
+    onDragStart: handleDragStart,
+    onDragOver: handleDragOver,
+    onDragEnd: handleDragEnd
   }
 }

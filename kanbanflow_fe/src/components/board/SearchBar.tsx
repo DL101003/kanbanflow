@@ -1,25 +1,32 @@
 import { useEffect, useState } from 'react'
-import { Input, Select, Button, Space, Tag } from 'antd'
-import { SearchOutlined, FilterOutlined, CloseCircleOutlined } from '@ant-design/icons'
-import { useSearchParams } from 'react-router-dom' // ✅ Dùng cái này thay vì local state
+import { useSearchParams } from 'react-router-dom'
+import { Search, Filter, X, Check } from 'lucide-react' // Icons
 import { useDebounce } from '@/hooks/useDebounce'
+
+// Shadcn
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { cn } from '@/lib/utils'
 
 interface SearchBarProps {
   onSearch: (query: string, filters: any) => void
 }
 
 export default function SearchBar({ onSearch }: SearchBarProps) {
-  // 1. Hook quản lý URL params
   const [searchParams, setSearchParams] = useSearchParams()
-  
-  // 2. Local state chỉ dùng để UI phản hồi nhanh (input typing)
   const [localQuery, setLocalQuery] = useState(searchParams.get('q') || '')
   const [showFilters, setShowFilters] = useState(false)
   
-  // Debounce việc set URL để tránh spam history browser
   const debouncedQuery = useDebounce(localQuery, 500)
 
-  // 3. Effect: Khi debounced value đổi -> Update URL
   useEffect(() => {
     setSearchParams(prev => {
       if (debouncedQuery) prev.set('q', debouncedQuery)
@@ -28,7 +35,6 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
     }, { replace: true })
   }, [debouncedQuery, setSearchParams])
 
-  // 4. Effect: Khi URL thay đổi -> Gọi callback onSearch để cha load lại data
   useEffect(() => {
     const query = searchParams.get('q') || ''
     const filters = {
@@ -37,16 +43,12 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
                  searchParams.get('completed') === 'false' ? false : undefined,
     }
     onSearch(query, filters)
-  }, [searchParams])
+  }, [searchParams, onSearch])
 
-  // Helpers để update filter
-  const updateFilter = (key: string, value: any) => {
+  const updateFilter = (key: string, value: string | null) => {
     setSearchParams(prev => {
-      if (value !== undefined && value !== null) {
-        prev.set(key, String(value))
-      } else {
-        prev.delete(key)
-      }
+      if (value) prev.set(key, value)
+      else prev.delete(key)
       return prev
     })
   }
@@ -54,77 +56,87 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
   const activeFiltersCount = Array.from(searchParams.keys()).filter(k => k !== 'q').length
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-sm mb-4 border border-gray-100">
-      <Space direction="vertical" className="w-full">
+    <div className="bg-card p-4 rounded-lg shadow-sm mb-4 border">
+      <div className="flex flex-col gap-4">
         <div className="flex gap-2">
-          <Input
-            placeholder="Search cards by title..."
-            prefix={<SearchOutlined className="text-gray-400" />}
-            value={localQuery}
-            onChange={(e) => setLocalQuery(e.target.value)}
-            allowClear
-            className="flex-1"
-          />
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search cards..."
+              value={localQuery}
+              onChange={(e) => setLocalQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
           <Button
-            icon={<FilterOutlined />}
-            type={showFilters || activeFiltersCount > 0 ? 'primary' : 'default'}
-            ghost={!showFilters && activeFiltersCount > 0}
+            variant={showFilters || activeFiltersCount > 0 ? "secondary" : "outline"}
             onClick={() => setShowFilters(!showFilters)}
+            className="gap-2"
           >
-            Filters {activeFiltersCount > 0 && `(${activeFiltersCount})`}
+            <Filter className="h-4 w-4" />
+            Filters
+            {activeFiltersCount > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5">{activeFiltersCount}</Badge>}
           </Button>
           
-          {/* Nút Clear All nếu có filter */}
           {(activeFiltersCount > 0 || localQuery) && (
              <Button 
-                icon={<CloseCircleOutlined />} 
-                danger 
-                type="text"
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-destructive"
                 onClick={() => {
                     setLocalQuery('')
                     setSearchParams({})
                 }}
              >
-                Clear
+                <X className="h-4 w-4" />
              </Button>
           )}
         </div>
 
-        {/* Filter Panel - Expandable */}
+        {/* Filter Panel */}
         {showFilters && (
-          <div className="flex gap-4 p-4 bg-gray-50 rounded mt-2 border border-gray-100 animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-gray-500 uppercase">Priority</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-md border animate-in fade-in slide-in-from-top-1">
+            <div className="space-y-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase">Priority</span>
                 <Select
-                  placeholder="Any Priority"
-                  allowClear
-                  className="w-40"
-                  value={searchParams.get('priority')}
-                  onChange={(val) => updateFilter('priority', val)}
+                  value={searchParams.get('priority') || "all"}
+                  onValueChange={(val) => updateFilter('priority', val === "all" ? null : val)}
                 >
-                  <Select.Option value="LOW"><Tag color="green">Low</Tag></Select.Option>
-                  <Select.Option value="MEDIUM"><Tag color="blue">Medium</Tag></Select.Option>
-                  <Select.Option value="HIGH"><Tag color="orange">High</Tag></Select.Option>
-                  <Select.Option value="URGENT"><Tag color="red">Urgent</Tag></Select.Option>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Priorities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Priorities</SelectItem>
+                    <SelectItem value="LOW">Low</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="HIGH">High</SelectItem>
+                    <SelectItem value="URGENT">Urgent</SelectItem>
+                  </SelectContent>
                 </Select>
             </div>
 
-            <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-gray-500 uppercase">Status</span>
+            <div className="space-y-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase">Status</span>
                 <Select
-                  placeholder="Any Status"
-                  allowClear
-                  className="w-40"
-                  value={searchParams.get('completed') === 'true' ? true : searchParams.get('completed') === 'false' ? false : undefined}
-                  onChange={(val) => updateFilter('completed', val)}
+                  value={searchParams.get('completed') === 'true' ? "completed" : searchParams.get('completed') === 'false' ? "progress" : "all"}
+                  onValueChange={(val) => {
+                     const value = val === "completed" ? "true" : val === "progress" ? "false" : null;
+                     updateFilter('completed', value);
+                  }}
                 >
-                  <Select.Option value={false}>In Progress</Select.Option>
-                  <Select.Option value={true}>Completed</Select.Option>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
                 </Select>
             </div>
           </div>
         )}
-      </Space>
+      </div>
     </div>
   )
 }

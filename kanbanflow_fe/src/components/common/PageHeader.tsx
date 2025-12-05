@@ -1,9 +1,5 @@
-import { Breadcrumb, Typography } from 'antd';
-import { HomeOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import React from 'react';
-
-const { Title } = Typography;
+import { ChevronRight, Home } from 'lucide-react';
 
 interface PageHeaderProps {
   title: string;
@@ -12,28 +8,34 @@ interface PageHeaderProps {
 }
 
 export default function PageHeader({ title, breadcrumbs = [], actions }: PageHeaderProps) {
-  const items = [
-    {
-      title: (
-        <Link to="/">
-          <HomeOutlined /> Home
-        </Link>
-      ),
-    },
-    ...breadcrumbs.map((item) => ({
-      title: item.path ? <Link to={item.path}>{item.title}</Link> : item.title,
-    })),
-  ];
-
   return (
-    <div className="bg-white p-6 border-b mb-6">
+    <div className="bg-background border-b px-6 py-5 mb-6">
       <div className="flex justify-between items-start">
-        <div>
-          <Breadcrumb className="mb-4" items={items} />
-          <Title level={2} className="!mb-0">
+        <div className="space-y-1">
+          {/* Custom Breadcrumb using Tailwind */}
+          <nav className="flex items-center text-sm text-muted-foreground mb-2">
+            <Link to="/" className="flex items-center hover:text-primary transition-colors">
+               <Home className="h-3.5 w-3.5 mr-1" /> Home
+            </Link>
+            {breadcrumbs.map((item, index) => (
+              <div key={index} className="flex items-center">
+                <ChevronRight className="h-4 w-4 mx-1 opacity-50" />
+                {item.path ? (
+                  <Link to={item.path} className="hover:text-primary transition-colors">
+                    {item.title}
+                  </Link>
+                ) : (
+                  <span className="text-foreground font-medium">{item.title}</span>
+                )}
+              </div>
+            ))}
+          </nav>
+          
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
             {title}
-          </Title>
+          </h1>
         </div>
+        
         {actions && <div className="flex gap-2">{actions}</div>}
       </div>
     </div>

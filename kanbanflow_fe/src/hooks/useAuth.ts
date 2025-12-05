@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { message } from 'antd'
+import { toast } from "sonner" // ✅ Fix
 import { authApi } from '@/api/auth.api'
 import { useAuthStore } from '@/store/authStore'
 
@@ -14,11 +14,11 @@ export function useAuth() {
       authApi.login(data.username, data.password),
     onSuccess: (data) => {
       setAuth(data)
-      message.success('Login successful')
+      toast.success('Login successful')
       navigate('/')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Login failed')
+      toast.error(error.response?.data?.message || 'Login failed')
     },
   })
 
@@ -26,11 +26,11 @@ export function useAuth() {
     mutationFn: authApi.register,
     onSuccess: (data) => {
       setAuth(data)
-      message.success('Registration successful')
+      toast.success('Registration successful')
       navigate('/')
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || 'Registration failed')
+      toast.error(error.response?.data?.message || 'Registration failed')
     },
   })
 
@@ -38,7 +38,7 @@ export function useAuth() {
     clearAuth()
     queryClient.clear()
     navigate('/login')
-    message.info('Logged out successfully')
+    toast.info('Logged out successfully')
   }
 
   const { data: currentUser, isLoading } = useQuery({
