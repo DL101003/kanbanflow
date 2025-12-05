@@ -1,73 +1,79 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Card,
-  Button,
-  Empty,
-  Spin,
-  Modal,
-  Form,
-  Input,
-  ColorPicker,
-  Row,
-  Col,
-  Typography,
-  Dropdown,
-  message,
-} from 'antd'
-import {
-  PlusOutlined,
-  StarOutlined,
-  StarFilled,
-  MoreOutlined,
-  EditOutlined,
-  DeleteOutlined,
-} from '@ant-design/icons'
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { toast } from "sonner"
 import { projectsApi } from '@/api/projects.api'
 import type { Project } from '@/types'
 
-const { Title, Paragraph } = Typography
-const { TextArea } = Input
+// Shadcn & Lucide
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Plus, MoreHorizontal, FolderOpen, Star, StarOff, Trash2, Edit, Loader2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
-interface CreateProjectFormValues {
-  name: string;
-  description?: string;
-  color?: string | { toHexString: () => string };
-}
+// 1. Zod Schema
+const projectSchema = z.object({
+  name: z.string().min(1, "Project name is required"),
+  description: z.string().optional(),
+  color: z.string().regex(/^#[0-9A-F]{6}$/i, "Invalid color").default("#3B82F6"),
+})
+
+type ProjectFormValues = z.infer<typeof projectSchema>
+
+// 2. Custom Color Picker (Thay thế Antd ColorPicker)
+const COLORS = ['#3B82F6', '#EF4444', '#F59E0B', '#10B981', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6']
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [form] = Form.useForm()
-  const [editModal, setEditModal] = useState({ open: false, project: null })
-  const [editForm] = Form.useForm()
+  
+  // States quản lý Dialog
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editProject, setEditProject] = useState<Project | null>(null)
 
+  // Forms
+  const createForm = useForm<ProjectFormValues>({
+    resolver: zodResolver(projectSchema),
+    defaultValues: { name: "", description: "", color: "#3B82F6" }
+  })
+
+  const editForm = useForm<ProjectFormValues>({
+    resolver: zodResolver(projectSchema),
+    defaultValues: { name: "", description: "", color: "#3B82F6" }
+  })
+
+  // Sync data vào Edit Form khi mở modal
   useEffect(() => {
-    queryClient.invalidateQueries({ queryKey: ['projects'] })
-  }, [])
+    if (editProject) {
+      editForm.reset({
+        name: editProject.name,
+        description: editProject.description || "",
+        color: editProject.color
+      })
+    }
+  }, [editProject, editForm])
 
   const { data, isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: () => projectsApi.getProjects(),
   })
 
+  // Mutations
   const createMutation = useMutation({
     mutationFn: projectsApi.createProject,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      message.success('Project created successfully')
-      setIsModalOpen(false)
-      form.resetFields()
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: projectsApi.deleteProject,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-      message.success('Project deleted')
+      toast.success('Project created successfully')
+      setCreateOpen(false)
+      createForm.reset()
     },
   })
 
@@ -76,261 +82,217 @@ export default function Dashboard() {
       projectsApi.updateProject(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      message.success('Project updated successfully')
+      toast.success('Project updated')
+      setEditProject(null)
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: projectsApi.deleteProject,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      toast.success('Project deleted')
+    },
+  })
 
   const toggleFavoriteMutation = useMutation({
     mutationFn: projectsApi.toggleFavorite,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
   })
 
-  const handleCreateProject = (values: CreateProjectFormValues) => {
-    let colorValue = '#3B82F6'
-
-    if (values.color) {
-      if (typeof values.color === 'object' && values.color.toHexString) {
-        // Lấy hex color và cắt bỏ alpha channel
-        const hexColor = values.color.toHexString()
-        // Chỉ lấy 7 ký tự đầu (#RRGGBB)
-        colorValue = hexColor.substring(0, 7)
-      } else if (typeof values.color === 'string') {
-        // Nếu đã là string, đảm bảo chỉ có 7 ký tự
-        colorValue = values.color.substring(0, 7)
-      }
+  // Handlers
+  const onCreateSubmit = (values: ProjectFormValues) => createMutation.mutate(values)
+  
+  const onEditSubmit = (values: ProjectFormValues) => {
+    if (editProject) {
+      updateMutation.mutate({ id: editProject.id, data: values })
     }
-
-    createMutation.mutate({
-      name: values.name,
-      description: values.description,
-      color: colorValue,
-    })
-  }
-
-  const handleEditProject = (project: Project) => {
-    setEditModal({ open: true, project })
-    editForm.setFieldsValue({
-      name: project.name,
-      description: project.description,
-      color: project.color,
-    })
-  }
-
-  const handleUpdateProject = (values: any) => {
-    if (editModal.project) {
-      updateMutation.mutate({
-        id: editModal.project.id,
-        data: {
-          name: values.name,
-          description: values.description,
-          color: values.color?.substring(0, 7) || editModal.project.color,
-        },
-      })
-      setEditModal({ open: false, project: null })
-    }
-  }
-
-  const handleDeleteProject = (project: Project, event?: React.MouseEvent) => {
-    // Stop event propagation để không navigate vào project
-    if (event) {
-      event.stopPropagation()
-    }
-
-    Modal.confirm({
-      title: 'Delete Project',
-      content: `Are you sure you want to delete "${project.name}"? This action cannot be undone.`,
-      okText: 'Delete',
-      okType: 'danger',
-      onOk: () => {
-        deleteMutation.mutate(project.id)
-      },
-    })
-  }
-
-  const getProjectMenu = (project: Project) => ({
-    items: [
-      {
-        key: 'edit',
-        icon: <EditOutlined />,
-        label: 'Edit',
-        onClick: (e: any) => {
-          e.domEvent.stopPropagation() // Prevent navigation
-          handleEditProject(project)
-        },
-      },
-      {
-      key: 'delete',
-      icon: <DeleteOutlined />,
-      label: 'Delete',
-      danger: true,
-      onClick: (menuInfo: any) => {
-        menuInfo.domEvent.stopPropagation()
-        handleDeleteProject(project)
-      },
-    },
-    ],
-  })
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Spin size="large" />
-      </div>
-    )
   }
 
   const projects = data?.content || []
 
+  // Component render Form (Dùng chung cho Create và Edit để đỡ lặp code)
+  const ProjectFormFields = ({ form }: { form: any }) => (
+    <div className="space-y-4 py-4">
+      <FormField
+        control={form.control}
+        name="name"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Project Name</FormLabel>
+            <FormControl><Input placeholder="My Awesome Project" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="description"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Description</FormLabel>
+            <FormControl><Textarea placeholder="What is this project about?" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="color"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Color Theme</FormLabel>
+            <FormControl>
+              <div className="flex gap-2 flex-wrap">
+                {COLORS.map((color) => (
+                  <div
+                    key={color}
+                    onClick={() => field.onChange(color)}
+                    className={cn(
+                      "w-8 h-8 rounded-full cursor-pointer transition-all hover:scale-110",
+                      field.value === color ? "ring-2 ring-offset-2 ring-primary scale-110" : "opacity-70 hover:opacity-100"
+                    )}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </div>
+  )
+
+  if (isLoading) {
+    return <div className="h-[50vh] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+  }
+
   return (
-    <>
-      <div className="mb-6 flex justify-between items-center">
-        <Title level={2}>My Projects</Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setIsModalOpen(true)}
-        >
-          New Project
+    <div className="container mx-auto max-w-7xl">
+      {/* Header */}
+      <div className="flex justify-between items-end mb-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground mt-1">Manage your projects and tasks.</p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)} size="lg" className="shadow-md">
+          <Plus className="mr-2 h-4 w-4" /> New Project
         </Button>
       </div>
 
+      {/* Empty State */}
       {projects.length === 0 ? (
-        <Card>
-          <Empty
-            description="No projects yet"
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-          >
-            <Button type="primary" onClick={() => setIsModalOpen(true)}>
-              Create First Project
-            </Button>
-          </Empty>
-        </Card>
+        <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed rounded-xl bg-muted/10">
+          <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <FolderOpen className="h-10 w-10 text-primary" />
+          </div>
+          <h3 className="text-xl font-semibold">No projects found</h3>
+          <p className="text-muted-foreground mt-2 mb-6">Get started by creating your first project.</p>
+          <Button onClick={() => setCreateOpen(true)}>Create Project</Button>
+        </div>
       ) : (
-        <Row gutter={[16, 16]}>
+        /* Projects Grid (Thay cho Antd Row/Col) */
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {projects.map((project: Project) => (
-            <Col key={project.id} xs={24} sm={12} md={8} lg={6}>
-              <Card
-                hoverable
-                onClick={() => navigate(`/projects/${project.id}`)}
-                className="h-full"
-                actions={[
-                  <Button
-                    type="text"
-                    icon={project.favorite ? <StarFilled /> : <StarOutlined />}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleFavoriteMutation.mutate(project.id)
-                    }}
-                    className={project.favorite ? 'text-yellow-500' : ''}
-                  />,
-                  <Dropdown menu={getProjectMenu(project)} trigger={['click']}>
-                    <Button
-                      type="text"
-                      icon={<MoreOutlined />}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </Dropdown>,
-                ]}
-              >
-                <div className="mb-4">
-                  <div
-                    className="w-full h-2 rounded mb-4"
+            <Card 
+              key={project.id} 
+              className="group relative cursor-pointer hover:shadow-lg transition-all duration-300 border-l-4 overflow-hidden"
+              style={{ borderLeftColor: project.color }}
+              onClick={() => navigate(`/projects/${project.id}`)}
+            >
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start">
+                  <div 
+                    className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm"
                     style={{ backgroundColor: project.color }}
-                  />
-                  <Title level={4}>{project.name}</Title>
-                  {project.description && (
-                    <Paragraph type="secondary" ellipsis={{ rows: 2 }}>
-                      {project.description}
-                    </Paragraph>
-                  )}
+                  >
+                    {project.name[0].toUpperCase()}
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2" onClick={(e) => e.stopPropagation()}>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditProject(project) }}>
+                        <Edit className="mr-2 h-4 w-4" /> Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        className="text-destructive focus:text-destructive"
+                        onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(project.id) }}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-              </Card>
-            </Col>
+                <CardTitle className="mt-3 truncate">{project.name}</CardTitle>
+                <CardDescription className="line-clamp-2 min-h-[40px]">
+                   {project.description || "No description provided."}
+                </CardDescription>
+              </CardHeader>
+              
+              <CardFooter className="pt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    "ml-auto transition-colors",
+                    project.favorite ? "text-yellow-500 hover:text-yellow-600" : "text-muted-foreground hover:text-yellow-500"
+                  )}
+                  onClick={(e) => { e.stopPropagation(); toggleFavoriteMutation.mutate(project.id) }}
+                >
+                   {project.favorite ? <Star className="h-4 w-4 fill-current" /> : <Star className="h-4 w-4" />}
+                </Button>
+              </CardFooter>
+            </Card>
           ))}
-        </Row>
+        </div>
       )}
 
-      <Modal
-        title="Create New Project"
-        open={isModalOpen}
-        onCancel={() => setIsModalOpen(false)}
-        footer={null}
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleCreateProject}
-        >
-          <Form.Item
-            name="name"
-            label="Project Name"
-            rules={[{ required: true, message: 'Please enter project name' }]}
-          >
-            <Input placeholder="Enter project name" />
-          </Form.Item>
+      {/* Create Project Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Project</DialogTitle>
+            <DialogDescription>Setup your new kanban board.</DialogDescription>
+          </DialogHeader>
+          <Form {...createForm}>
+            <form onSubmit={createForm.handleSubmit(onCreateSubmit)}>
+              <ProjectFormFields form={createForm} />
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Create
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
-          <Form.Item
-            name="description"
-            label="Description"
-          >
-            <TextArea
-              rows={4}
-              placeholder="Enter project description (optional)"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="color"
-            label="Color"
-          >
-            <ColorPicker defaultValue="#3B82F6" />
-          </Form.Item>
-
-          <Form.Item className="mb-0">
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createMutation.isPending}
-              block
-            >
-              Create Project
-            </Button>
-          </Form.Item>
-        </Form>
-      </Modal>
-      <Modal
-        title="Edit Project"
-        open={editModal.open}
-        onCancel={() => setEditModal({ open: false, project: null })}
-        footer={null}
-      >
-        <Form
-          form={editForm}
-          layout="vertical"
-          onFinish={handleUpdateProject}
-        >
-          <Form.Item
-            name="name"
-            label="Project Name"
-            rules={[{ required: true, message: 'Please enter project name' }]}
-          >
-            <Input placeholder="Enter project name" />
-          </Form.Item>
-
-          <Form.Item name="description" label="Description">
-            <TextArea rows={4} placeholder="Enter project description" />
-          </Form.Item>
-
-          <Form.Item className="mb-0">
-            <Button type="primary" htmlType="submit" block>
-              Update Project
-            </Button>
-          </Form.Item>
-        </Form>
-      </Modal>
-    </>
+      {/* Edit Project Dialog */}
+      <Dialog open={!!editProject} onOpenChange={(open) => !open && setEditProject(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Project</DialogTitle>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(onEditSubmit)}>
+              <ProjectFormFields form={editForm} />
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={() => setEditProject(null)}>Cancel</Button>
+                <Button type="submit" disabled={updateMutation.isPending}>
+                   {updateMutation.isPending ? "Updating..." : "Save Changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }

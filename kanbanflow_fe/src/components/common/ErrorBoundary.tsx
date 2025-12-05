@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from 'react'
-import { Button, Result } from 'antd'
-import { errorTracker } from '@/utils/errorTracking'
+import { AlertCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { errorTracker } from '@/lib/errorTracking'
 
 interface Props {
   children: ReactNode
@@ -33,16 +34,18 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <Result
-          status="500"
-          title="Something went wrong"
-          subTitle="Sorry, an unexpected error occurred."
-          extra={
-            <Button type="primary" onClick={this.handleReset}>
-              Back to Home
-            </Button>
-          }
-        />
+        <div className="flex flex-col items-center justify-center min-h-[400px] p-6 text-center">
+          <div className="rounded-full bg-destructive/10 p-4 mb-4">
+            <AlertCircle className="h-10 w-10 text-destructive" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">Something went wrong</h2>
+          <p className="text-muted-foreground mb-6 max-w-md">
+            We apologize for the inconvenience. The error has been logged.
+          </p>
+          <Button onClick={this.handleReset}>
+            Return to Home
+          </Button>
+        </div>
       )
     }
 

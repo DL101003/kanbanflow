@@ -1,21 +1,18 @@
-import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
-dayjs.extend(relativeTime)
+import { format, isAfter, parseISO } from 'date-fns'
 
-export function formatDate(date: string | Date, dateFormat = 'MMM DD, YYYY'): string {
-  return dayjs(date).format(dateFormat)
+export function formatDate(date: string | Date, dateFormat = 'MMM dd, yyyy'): string {
+  const parsedDate = typeof date === 'string' ? parseISO(date) : date
+  return format(parsedDate, dateFormat)
 }
 
 export function isOverdue(dueDate: string | Date | null): boolean {
   if (!dueDate) return false
-  return dayjs().isAfter(dayjs(dueDate), 'day')
-}
-
-export function fromNow(date: string | Date): string {
-  return dayjs(date).fromNow()
+  const parsedDate = typeof dueDate === 'string' ? parseISO(dueDate) : dueDate
+  return isAfter(new Date(), parsedDate)
 }
 
 export function getInitials(name: string): string {
+  if (!name) return '?'
   return name
     .split(' ')
     .map(part => part[0])

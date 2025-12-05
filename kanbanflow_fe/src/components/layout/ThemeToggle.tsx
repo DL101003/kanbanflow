@@ -1,5 +1,5 @@
-import { Switch, ConfigProvider, theme } from 'antd'
-import { SunOutlined, MoonOutlined } from '@ant-design/icons'
+import { Switch } from "@/components/ui/switch"
+import { Moon, Sun } from "lucide-react"
 import { useTheme } from '@/hooks/useTheme'
 import { useEffect } from 'react'
 
@@ -7,29 +7,19 @@ export default function ThemeToggle() {
   const { isDarkMode, toggleTheme } = useTheme()
 
   useEffect(() => {
-    // Apply dark class to HTML element
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark')
-      document.body.style.backgroundColor = '#1f2937'
-    } else {
-      document.documentElement.classList.remove('dark')
-      document.body.style.backgroundColor = '#f9fafb'
-    }
+    const root = window.document.documentElement
+    root.classList.remove("light", "dark")
+    root.classList.add(isDarkMode ? "dark" : "light")
   }, [isDarkMode])
 
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
-      }}
-    >
-      <Switch
-        checked={isDarkMode}
-        onChange={toggleTheme}
-        checkedChildren={<MoonOutlined />}
-        unCheckedChildren={<SunOutlined />}
-        style={{ backgroundColor: isDarkMode ? '#4b5563' : '#3b82f6' }}
+    <div className="flex items-center space-x-2">
+      <Sun className="h-4 w-4 text-muted-foreground" />
+      <Switch 
+        checked={isDarkMode} 
+        onCheckedChange={toggleTheme} 
       />
-    </ConfigProvider>
+      <Moon className="h-4 w-4 text-muted-foreground" />
+    </div>
   )
 }

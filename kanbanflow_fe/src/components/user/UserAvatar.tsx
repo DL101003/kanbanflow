@@ -1,36 +1,37 @@
-import { Avatar, Tooltip } from 'antd'
-import { UserOutlined } from '@ant-design/icons'
-import type { UserSummary } from '@/types'
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { getInitials } from "@/lib/helpers"
+import type { UserSummary } from "@/types"
 
 interface UserAvatarProps {
   user?: UserSummary | null
-  size?: 'small' | 'default' | 'large' | number
+  className?: string
   showTooltip?: boolean
 }
 
-export default function UserAvatar({ user, size = 'default', showTooltip = true }: UserAvatarProps) {
-  if (!user) {
-    return (
-      <Avatar size={size} icon={<UserOutlined />} className="bg-gray-400" />
-    )
-  }
-
+export default function UserAvatar({ user, className, showTooltip = true }: UserAvatarProps) {
   const avatar = (
-    <Avatar
-      size={size}
-      src={user.avatarUrl}
-      icon={!user.avatarUrl && <UserOutlined />}
-      className={!user.avatarUrl ? 'bg-blue-500' : ''}
-    >
-      {!user.avatarUrl && user.fullName[0].toUpperCase()}
+    <Avatar className={className}>
+      <AvatarImage src={user?.avatarUrl} />
+      <AvatarFallback>{getInitials(user?.fullName || '?')}</AvatarFallback>
     </Avatar>
   )
 
-  if (showTooltip) {
+  if (showTooltip && user?.fullName) {
     return (
-      <Tooltip title={user.fullName}>
-        {avatar}
-      </Tooltip>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>{avatar}</TooltipTrigger>
+          <TooltipContent>
+            <p>{user.fullName}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     )
   }
 

@@ -1,5 +1,5 @@
 import axios from 'axios'
-import toast from 'react-hot-toast'
+import { toast } from "sonner"
 import { useAuthStore } from '@/store/authStore'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
@@ -29,11 +29,11 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       useAuthStore.getState().logout()
-      window.location.href = '/login'
     } else if (error.response?.data?.message) {
       toast.error(error.response.data.message)
     } else if (error.response?.status === 500) {
       console.error('Server error:', error)
+      toast.error('Internal Server Error')
     }
     return Promise.reject(error)
   }

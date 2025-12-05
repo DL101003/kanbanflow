@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
+import { toast } from "sonner" // ✅ Fix
 import { projectsApi } from '@/api/projects.api'
 
 export function useProjects() {
@@ -15,7 +15,7 @@ export function useProjects() {
     mutationFn: projectsApi.createProject,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      message.success('Project created successfully')
+      toast.success('Project created successfully')
     },
   })
 
@@ -24,7 +24,7 @@ export function useProjects() {
       projectsApi.updateProject(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      message.success('Project updated successfully')
+      toast.success('Project updated successfully')
     },
   })
 
@@ -32,7 +32,7 @@ export function useProjects() {
     mutationFn: projectsApi.deleteProject,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      message.success('Project deleted successfully')
+      toast.success('Project deleted successfully')
     },
   })
 
